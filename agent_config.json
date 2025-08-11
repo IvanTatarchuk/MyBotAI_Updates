@@ -1,0 +1,118 @@
+{
+  "agent_settings": {
+    "name": "Agent Programista",
+    "version": "1.0.0",
+    "description": "Inteligentny asystent programisty z AI",
+    "author": "AI Assistant",
+    "default_workspace": ".",
+    "cache_enabled": true,
+    "max_cache_size": 1000,
+    "analysis_timeout": 30
+  },
+  "supported_languages": {
+    "python": {
+      "extensions": [".py"],
+      "complexity_threshold": 10,
+      "max_lines_warning": 500,
+      "enable_ast_analysis": true
+    },
+    "javascript": {
+      "extensions": [".js", ".jsx"],
+      "complexity_threshold": 8,
+      "max_lines_warning": 400,
+      "enable_ast_analysis": false
+    },
+    "typescript": {
+      "extensions": [".ts", ".tsx"],
+      "complexity_threshold": 8,
+      "max_lines_warning": 400,
+      "enable_ast_analysis": false
+    },
+    "java": {
+      "extensions": [".java"],
+      "complexity_threshold": 12,
+      "max_lines_warning": 600,
+      "enable_ast_analysis": false
+    },
+    "cpp": {
+      "extensions": [".cpp", ".cc", ".cxx"],
+      "complexity_threshold": 15,
+      "max_lines_warning": 800,
+      "enable_ast_analysis": false
+    },
+    "c": {
+      "extensions": [".c"],
+      "complexity_threshold": 15,
+      "max_lines_warning": 600,
+      "enable_ast_analysis": false
+    }
+  },
+  "analysis_rules": {
+    "check_code_quality": true,
+    "check_security": true,
+    "check_performance": true,
+    "check_best_practices": true,
+    "suggest_refactoring": true,
+    "find_code_smells": true
+  },
+  "project_templates": {
+    "python_package": {
+      "name": "Pakiet Python",
+      "description": "Standardowy pakiet Python z testami",
+      "directories": ["src", "tests", "docs"],
+      "files": ["setup.py", "requirements.txt", "README.md", ".gitignore"]
+    },
+    "web_project": {
+      "name": "Projekt Web",
+      "description": "Aplikacja webowa Flask",
+      "directories": ["static", "templates", "static/css", "static/js"],
+      "files": ["app.py", "requirements.txt", "README.md"]
+    },
+    "data_science": {
+      "name": "Projekt Data Science",
+      "description": "Projekt analizy danych",
+      "directories": ["data", "notebooks", "src", "models", "reports"],
+      "files": ["requirements.txt", "README.md", "main.py"]
+    },
+    "api_project": {
+      "name": "Projekt API",
+      "description": "REST API z FastAPI",
+      "directories": ["app", "tests", "docs"],
+      "files": ["main.py", "requirements.txt", "README.md", "Dockerfile"]
+    }
+  },
+  "code_quality_checks": {
+    "python": [
+      "unused_imports",
+      "long_functions", 
+      "complex_conditions",
+      "magic_numbers",
+      "empty_except_blocks",
+      "print_statements",
+      "eval_usage",
+      "broad_exceptions"
+    ],
+    "javascript": [
+      "console_log",
+      "var_usage",
+      "missing_semicolons",
+      "undefined_variables"
+    ]
+  },
+  "report_settings": {
+    "include_statistics": true,
+    "include_language_breakdown": true,
+    "include_complexity_analysis": true,
+    "include_issues": true,
+    "include_suggestions": true,
+    "include_file_details": true,
+    "max_files_in_detail": 50
+  },
+  "ui_settings": {
+    "use_colors": true,
+    "progress_bars": true,
+    "verbose_output": false,
+    "save_reports": true,
+    "default_output_format": "markdown"
+  }
+}
