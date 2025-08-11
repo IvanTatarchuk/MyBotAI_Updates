@@ -1,0 +1,23 @@
+# Agent Programista - Wymagane pakiety Python
+
+# Podstawowe biblioteki (już w standardzie Python 3.8+)
+# ast - analiza składni Python
+# argparse - parsowanie argumentów CLI
+# pathlib - obsługa ścieżek
+# datetime - znaczniki czasu
+
+# Opcjonalne rozszerzenia (do zainstalowania w razie potrzeby):
+# pylint>=2.15.0          # Statyczna analiza kodu Python
+# black>=22.0.0           # Formatowanie kodu Python
+# flake8>=5.0.0           # Linting kodu Python
+# mypy>=0.991             # Sprawdzanie typów Python
+# pytest>=7.0.0           # Framework testowy
+# coverage>=6.0.0         # Pokrycie testami
+# bandit>=1.7.0           # Analiza bezpieczeństwa
+# radon>=5.1.0            # Metryki złożoności kodu
+
+# Dla rozwiniętej funkcjonalności:
+# requests>=2.28.0        # HTTP requests dla integracji z API
+# click>=8.0.0            # Alternatywny CLI framework
+# rich>=12.0.0            # Kolorowe i bogate formatowanie terminala
+# colorama>=0.4.0         # Kolorowanie na Windows
