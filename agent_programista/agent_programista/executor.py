@@ -8,7 +8,10 @@ from typing import List, Optional
 from rich.console import Console
 from rich.panel import Panel
 
+from .logger import get_logger
+
 console = Console()
+logger = get_logger()
 
 
 @dataclass
@@ -29,10 +32,24 @@ def execute_shell_command(command: str, cwd: Optional[str] = None, timeout_secon
             shell=True,
             check=False,
             text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
         )
+        if proc.stdout:
+            console.print(proc.stdout)
+            logger.info(proc.stdout)
+        if proc.stderr:
+            console.print(proc.stderr)
+            logger.warning(proc.stderr)
+        logger.info("command '%s' exited with %s", command, proc.returncode)
         return proc.returncode
+    except subprocess.TimeoutExpired:
+        console.print("[red]Przekroczono limit czasu komendy.[/red]")
+        logger.error("command '%s' timed out after %ss", command, timeout_seconds)
+        return 124
     except Exception as exc:
         console.print(f"[red]Błąd wykonania komendy:[/red] {exc}")
+        logger.exception("command '%s' failed", command)
         return 1
 
 
