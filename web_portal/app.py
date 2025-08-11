@@ -13,6 +13,10 @@ import json
 import hashlib
 import datetime
 import os
+import base64
+import hmac
+import struct
+import time
 
 BASE = Path(__file__).resolve().parent
 DATA = BASE / 'data'
@@ -29,12 +33,9 @@ PROFESSIONS_FILE = DATA / 'professions.json'
 ERASURE_FILE = DATA / 'erasure_requests.json'
 AUDIT_LOG = LOGS / 'audit.log'
 
-# New data files
-USERS_FILE = DATA / 'users.json'
-SESSIONS_FILE = DATA / 'sessions.json'
-OTPS_FILE = DATA / 'otps.json'
-KYC_FILE = DATA / 'kyc.json'
-ESCROWS_FILE = DATA / 'escrows.json'
+# 2FA / Reviews / Messages data files
+REVIEWS_FILE = DATA / 'reviews.json'
+MESSAGES_FILE = DATA / 'messages.json'
 
 for p, default in [
     (TENDERS_FILE, {"tenders": [], "bids": []}),
@@ -48,6 +49,8 @@ for p, default in [
     (OTPS_FILE, {"otps": []}),
     (KYC_FILE, {"kyc": []}),
     (ESCROWS_FILE, {"escrows": []}),
+    (REVIEWS_FILE, {"reviews": []}),
+    (MESSAGES_FILE, {"messages": []}),
 ]:
     if not p.exists():
         p.write_text(json.dumps(default, indent=2), encoding='utf-8')
@@ -104,6 +107,29 @@ def _load_json(p: Path):
 
 def _save_json(p: Path, obj):
     p.write_text(json.dumps(obj, indent=2), encoding='utf-8')
+
+# 2FA (TOTP) helpers
+
+def _totp_generate_secret(bytes_len: int = 20) -> str:
+    return base64.b32encode(os.urandom(bytes_len)).decode('utf-8').replace('=', '')
+
+
+def _totp_at(secret_b32: str, for_time: int, step: int = 30, digits: int = 6) -> str:
+    key = base64.b32decode(secret_b32 + ('=' * ((8 - len(secret_b32) % 8) % 8)))
+    counter = int(for_time // step)
+    msg = struct.pack('>Q', counter)
+    digest = hmac.new(key, msg, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    code = (struct.unpack('>I', digest[offset:offset+4])[0] & 0x7FFFFFFF) % (10 ** digits)
+    return str(code).zfill(digits)
+
+
+def _totp_verify(secret_b32: str, code: str, window: int = 1) -> bool:
+    now = int(time.time())
+    for w in range(-window, window + 1):
+        if _totp_at(secret_b32, now + (w * 30)) == code:
+            return True
+    return False
 
 # Simple cookie parsing
 
@@ -255,6 +281,172 @@ def application(environ, start_response):
         headers = []
         _set_cookie(start_response, headers, 'sid', 'deleted', max_age=0)
         return _json_response(start_response, {"ok": True}, headers=headers)
+
+    # 2FA (TOTP) endpoints
+    if path == '/api/auth/2fa/setup' and method == 'POST':
+        user = _get_user(environ)
+        if not user:
+            return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        users = _load_json(USERS_FILE)
+        u = next((x for x in users.get('users', []) if x.get('id') == user['id']), None)
+        if u is None:
+            return _json_response(start_response, {"error": "User not found"}, '404 Not Found')
+        mfa = u.get('mfa') or {}
+        if not mfa.get('secret'):
+            mfa['secret'] = _totp_generate_secret()
+            mfa['enabled'] = False
+            u['mfa'] = mfa
+            _save_json(USERS_FILE, users)
+        otpauth = f"otpauth://totp/Portal:{u['email']}?secret={mfa['secret']}&issuer=Portal"
+        return _json_response(start_response, {"ok": True, "otpauth": otpauth})
+
+    if path == '/api/auth/2fa/enable' and method == 'POST':
+        user = _get_user(environ)
+        if not user:
+            return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        length = int(environ.get('CONTENT_LENGTH') or 0)
+        body = environ['wsgi.input'].read(length) if length else b''
+        payload = json.loads(body or b'{}')
+        code = (payload.get('code') or '').strip()
+        users = _load_json(USERS_FILE)
+        u = next((x for x in users.get('users', []) if x.get('id') == user['id']), None)
+        mfa = (u or {}).get('mfa') or {}
+        if not mfa.get('secret'):
+            return _json_response(start_response, {"error": "Setup required"}, '400 Bad Request')
+        if not _totp_verify(mfa['secret'], code):
+            return _json_response(start_response, {"error": "Invalid code"}, '400 Bad Request')
+        mfa['enabled'] = True
+        u['mfa'] = mfa
+        _save_json(USERS_FILE, users)
+        return _json_response(start_response, {"ok": True})
+
+    if path == '/api/auth/2fa/verify' and method == 'POST':
+        user = _get_user(environ)
+        if not user:
+            return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        length = int(environ.get('CONTENT_LENGTH') or 0)
+        payload = json.loads((environ['wsgi.input'].read(length) or b'{}'))
+        code = (payload.get('code') or '').strip()
+        users = _load_json(USERS_FILE)
+        u = next((x for x in users.get('users', []) if x.get('id') == user['id']), None)
+        mfa = (u or {}).get('mfa') or {}
+        if not (mfa.get('enabled') and mfa.get('secret')):
+            return _json_response(start_response, {"error": "2FA not enabled"}, '400 Bad Request')
+        ok = _totp_verify(mfa['secret'], code)
+        return _json_response(start_response, {"ok": bool(ok)})
+
+    # Reviews endpoints
+    if path == '/api/reviews' and method == 'POST':
+        user = _get_user(environ)
+        if not user:
+            return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        payload = json.loads((environ['wsgi.input'].read(int(environ.get('CONTENT_LENGTH') or 0)) or b'{}'))
+        target_type = (payload.get('target_type') or '').lower()  # 'user' | 'tender'
+        rating = int(payload.get('rating') or 0)
+        comment = (payload.get('comment') or '')[:2000]
+        if target_type not in ('user','tender') or rating < 1 or rating > 5:
+            return _json_response(start_response, {"error": "Bad request"}, '400 Bad Request')
+        entry = {
+            'id': f"r_{int(time.time())}",
+            'target_type': target_type,
+            'target_id': (payload.get('target_id') or '')[:200],
+            'author': user['email'],
+            'rating': rating,
+            'comment': comment,
+            'created_at': _now_iso(),
+        }
+        rev = _load_json(REVIEWS_FILE)
+        rev.setdefault('reviews', []).append(entry)
+        _save_json(REVIEWS_FILE, rev)
+        _audit('review_create', ip, {'target_type': target_type})
+        return _json_response(start_response, {"ok": True, "review": entry}, '201 Created')
+
+    if path == '/api/reviews' and method == 'GET':
+        qs = parse_qs(environ.get('QUERY_STRING') or '')
+        target_type = (qs.get('target_type',[''])[0]).lower()
+        target_id = (qs.get('target_id',[''])[0])
+        rev = _load_json(REVIEWS_FILE)
+        items = [r for r in rev.get('reviews', []) if (not target_type or r.get('target_type')==target_type) and (not target_id or r.get('target_id')==target_id)]
+        return _json_response(start_response, {"reviews": items})
+
+    # Messaging endpoints (negotiations)
+    if path == '/api/messages/post' and method == 'POST':
+        user = _get_user(environ)
+        if not user:
+            return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        payload = json.loads((environ['wsgi.input'].read(int(environ.get('CONTENT_LENGTH') or 0)) or b'{}'))
+        tid = (payload.get('tender_id') or '')
+        text = (payload.get('text') or '')[:4000]
+        if not tid or not text:
+            return _json_response(start_response, {"error": "Bad request"}, '400 Bad Request')
+        msg = {
+            'id': f"m_{int(time.time())}",
+            'tender_id': tid,
+            'sender': user['email'],
+            'text': text,
+            'created_at': _now_iso(),
+        }
+        msgs = _load_json(MESSAGES_FILE)
+        msgs.setdefault('messages', []).append(msg)
+        _save_json(MESSAGES_FILE, msgs)
+        _audit('message_post', ip, {'tender_id': tid})
+        return _json_response(start_response, {"ok": True, "message": msg}, '201 Created')
+
+    if path == '/api/messages/list' and method == 'GET':
+        qs = parse_qs(environ.get('QUERY_STRING') or '')
+        tid = qs.get('tender_id', [''])[0]
+        msgs = _load_json(MESSAGES_FILE)
+        items = [m for m in msgs.get('messages', []) if (not tid or m.get('tender_id') == tid)]
+        return _json_response(start_response, {"messages": items})
+
+    # Milestones endpoints
+    if path == '/api/milestones/add' and method == 'POST':
+        user = _get_user(environ)
+        if not user:
+            return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        payload = json.loads((environ['wsgi.input'].read(int(environ.get('CONTENT_LENGTH') or 0)) or b'{}'))
+        tid = payload.get('tender_id')
+        title = (payload.get('title') or '')[:160]
+        amount = float(payload.get('amount') or 0)
+        due_date = (payload.get('due_date') or '')[:40]
+        store = _load_json(TENDERS_FILE)
+        tender = next((t for t in store.get('tenders', []) if t.get('id') == tid), None)
+        if not tender: return _json_response(start_response, {"error": "Unknown tender"}, '404 Not Found')
+        if user.get('role') != 'admin' and tender.get('owner_email','').lower() != user.get('email'):
+            return _json_response(start_response, {"error": "Forbidden"}, '403 Forbidden')
+        milestone = {
+            'id': f"ms_{int(time.time())}",
+            'title': title,
+            'amount': amount,
+            'due_date': due_date,
+            'status': 'pending',
+            'created_at': _now_iso(),
+        }
+        tender.setdefault('milestones', []).append(milestone)
+        _save_json(TENDERS_FILE, store)
+        _audit('milestone_add', ip, {'tender_id': tid})
+        return _json_response(start_response, {"ok": True, "milestone": milestone}, '201 Created')
+
+    if path == '/api/milestones/update' and method == 'POST':
+        user = _get_user(environ)
+        if not user: return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        payload = json.loads((environ['wsgi.input'].read(int(environ.get('CONTENT_LENGTH') or 0)) or b'{}'))
+        tid = payload.get('tender_id')
+        msid = payload.get('milestone_id')
+        status = (payload.get('status') or '')
+        if status not in ('pending','in_progress','submitted','accepted','paid'):
+            return _json_response(start_response, {"error": "Bad status"}, '400 Bad Request')
+        store = _load_json(TENDERS_FILE)
+        tender = next((t for t in store.get('tenders', []) if t.get('id') == tid), None)
+        if not tender: return _json_response(start_response, {"error": "Unknown tender"}, '404 Not Found')
+        if user.get('role') != 'admin' and tender.get('owner_email','').lower() != user.get('email'):
+            return _json_response(start_response, {"error": "Forbidden"}, '403 Forbidden')
+        ms = next((m for m in tender.get('milestones', []) if m.get('id') == msid), None)
+        if not ms: return _json_response(start_response, {"error": "Unknown milestone"}, '404 Not Found')
+        ms['status'] = status
+        _save_json(TENDERS_FILE, store)
+        _audit('milestone_update', ip, {'tender_id': tid, 'milestone_id': msid, 'status': status})
+        return _json_response(start_response, {"ok": True, "milestone": ms})
 
     # KYC endpoints
     if path == '/api/kyc/submit' and method == 'POST':
@@ -494,16 +686,19 @@ def application(environ, start_response):
         esc = _load_json(ESCROWS_FILE)
         kyc = _load_json(KYC_FILE)
         users = _load_json(USERS_FILE)
+        rev = _load_json(REVIEWS_FILE)
         stats = {
             "counts": {
                 "tenders": len(tenders.get('tenders', [])),
                 "bids": len(tenders.get('bids', [])),
                 "escrows": len(esc.get('escrows', [])),
                 "users": len(users.get('users', [])),
-                "kyc_pending": len([k for k in kyc.get('kyc', []) if k.get('status') == 'pending'])
+                "kyc_pending": len([k for k in kyc.get('kyc', []) if k.get('status') == 'pending']),
+                "reviews": len(rev.get('reviews', [])),
             },
             "tenders_by_status": {s: len([t for t in tenders.get('tenders', []) if t.get('status') == s]) for s in ('open','under_review','awarded','closed')},
             "escrows_by_state": {s: len([e for e in esc.get('escrows', []) if e.get('state') == s]) for s in ('created','funded','released','refunded')},
+            "average_rating": round(sum(r.get('rating',0) for r in rev.get('reviews', [])) / max(1, len(rev.get('reviews', []))), 2)
         }
         return _json_response(start_response, stats)
 
