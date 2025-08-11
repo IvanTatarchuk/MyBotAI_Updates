@@ -1,0 +1,29 @@
+{
+  "skills": [
+    "Python",
+    "JavaScript",
+    "React",
+    "Node.js",
+    "Mobile Development",
+    "Game Development",
+    "API Development",
+    "Automation"
+  ],
+  "hourly_rate": 50,
+  "min_budget": 100,
+  "max_budget": 10000,
+  "portfolio": [
+    "Mobile game development with Kivy",
+    "AI-powered code analysis system",
+    "Web application with React and Node.js",
+    "Automation scripts and tools",
+    "API development and integration"
+  ],
+  "proposal_templates": {
+    "web_development": "I specialize in modern web development with React, Node.js, and Python. I can deliver high-quality, scalable applications with clean code and comprehensive testing.",
+    "mobile_development": "I have extensive experience in mobile development, including creating Call of Duty Mobile-style games with Kivy and Pygame. I can build cross-platform mobile applications.",
+    "game_development": "I specialize in game development, particularly mobile FPS games. I can create complete game engines with 3D graphics, AI enemies, and multiplayer support.",
+    "automation": "I excel at automation and can create intelligent systems that streamline workflows and improve efficiency.",
+    "default": "I am a professional developer with expertise in multiple technologies. I deliver high-quality code with comprehensive documentation and testing."
+  }
+}
