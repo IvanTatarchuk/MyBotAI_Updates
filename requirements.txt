@@ -13,3 +13,6 @@
 # Development dependencies (optional):
 # mypy>=0.800      # For type checking
 # coverage>=5.0.0  # For test coverage
+
+# Production serving
+gunicorn>=21.2

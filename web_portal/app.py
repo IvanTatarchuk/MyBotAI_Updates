@@ -196,6 +196,14 @@ def application(environ, start_response):
         return _serve_file(start_response, TEMPLATES / 'index.html', 'text/html; charset=utf-8')
     if path == '/admin':
         return _serve_file(start_response, TEMPLATES / 'admin.html', 'text/html; charset=utf-8')
+
+    # Healthchecks
+    if path == '/healthz':
+        return _json_response(start_response, {"status":"ok"})
+    if path == '/readyz':
+        # simple readiness (files exist)
+        ok = all(p.exists() for p in [TENDERS_FILE, PROFESSIONS_FILE])
+        return _json_response(start_response, {"ready": bool(ok)})
     if path.startswith('/static/'):
         rel = path[len('/static/'):]
         f = STATIC / rel
@@ -708,6 +716,7 @@ def application(environ, start_response):
 
 
 def run(host='0.0.0.0', port=8000):
+    port = int(os.environ.get('PORT', port))
     with make_server(host, port, application) as httpd:
         print(f"Web portal running on http://{host}:{port}")
         httpd.serve_forever()

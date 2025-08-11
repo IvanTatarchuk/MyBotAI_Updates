@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: universal-tenders-portal
+    env: python
+    buildCommand: ""
+    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT web_portal.app:application
+    envVars:
+      - key: SECRET_KEY
+        value: change_me
+      - key: VERTICALS
+        value: construction,transport,dev
+      - key: BASE_URL
+        value: https://your-domain.example
+      - key: PORT
+        value: 8000
+    healthCheckPath: /healthz
+    autoDeploy: true
