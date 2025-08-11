@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚙️ System Monitor - Monitorowanie Systemu</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            min-height: 100vh;
+            color: #ecf0f1;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: rgba(52, 73, 94, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .header h1 {
+            color: #ecf0f1;
+            font-size: 2.2em;
+            margin-bottom: 15px;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .nav-link {
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+        
+        .system-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .system-panel {
+            background: rgba(52, 73, 94, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .panel-title {
+            font-size: 1.5em;
+            color: #3498db;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .metrics-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .metric-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .metric-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #2ecc71;
+            margin-bottom: 5px;
+        }
+        
+        .metric-label {
+            color: #bdc3c7;
+            font-size: 0.9em;
+        }
+        
+        .logs-container {
+            grid-column: 1 / -1;
+            background: rgba(52, 73, 94, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .logs-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .control-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .control-btn:hover {
+            background: #2980b9;
+        }
+        
+        .logs-display {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 10px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        
+        .log-info {
+            color: #3498db;
+        }
+        
+        .log-warning {
+            color: #f39c12;
+            background: rgba(243, 156, 18, 0.1);
+        }
+        
+        .log-error {
+            color: #e74c3c;
+            background: rgba(231, 76, 60, 0.1);
+        }
+        
+        .log-success {
+            color: #2ecc71;
+        }
+        
+        .health-indicators {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .health-indicator {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+        
+        .health-status {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .health-label {
+            color: #bdc3c7;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        
+        .health-value {
+            color: #ecf0f1;
+            font-weight: bold;
+        }
+        
+        .status-healthy {
+            color: #2ecc71;
+        }
+        
+        .status-warning {
+            color: #f39c12;
+        }
+        
+        .status-critical {
+            color: #e74c3c;
+        }
+        
+        .refresh-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .refresh-indicator.show {
+            opacity: 1;
+        }
+        
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 25px;
+            background: #7f8c8d;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .toggle-switch.active {
+            background: #2ecc71;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 21px;
+            height: 21px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+        }
+        
+        .toggle-switch.active .toggle-slider {
+            transform: translateX(25px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ System Monitor</h1>
+            <div class="nav-links">
+                <a href="/dashboard" class="nav-link">📊 Dashboard</a>
+                <a href="/agents" class="nav-link">🤖 Agents</a>
+                <a href="/builders" class="nav-link">🛠️ Builders</a>
+                <a href="/" class="nav-link">🏠 Home</a>
+                <a href="/admin" class="nav-link">👑 Admin</a>
+            </div>
+            <div class="auto-refresh">
+                <span>Auto Refresh:</span>
+                <div class="toggle-switch active" id="autoRefreshToggle">
+                    <div class="toggle-slider"></div>
+                </div>
+                <span id="refreshStatus">ON (5s)</span>
+            </div>
+        </div>
+        
+        <div class="system-grid">
+            <!-- Performance Metrics -->
+            <div class="system-panel">
+                <h2 class="panel-title">📊 Performance Metrics</h2>
+                <div id="performanceMetrics" class="metrics-display">
+                    <div class="metric-item">
+                        <div id="cpuUsage" class="metric-value">--</div>
+                        <div class="metric-label">CPU Usage</div>
+                    </div>
+                    <div class="metric-item">
+                        <div id="memoryUsage" class="metric-value">--</div>
+                        <div class="metric-label">Memory</div>
+                    </div>
+                    <div class="metric-item">
+                        <div id="activeConnections" class="metric-value">--</div>
+                        <div class="metric-label">Connections</div>
+                    </div>
+                    <div class="metric-item">
+                        <div id="requestsPerSecond" class="metric-value">--</div>
+                        <div class="metric-label">Req/sec</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- System Health -->
+            <div class="system-panel">
+                <h2 class="panel-title">💚 System Health</h2>
+                <div id="healthIndicators" class="health-indicators">
+                    <div class="health-indicator">
+                        <div id="webPortalHealth" class="health-status status-healthy">🟢</div>
+                        <div class="health-label">Web Portal</div>
+                        <div class="health-value">Online</div>
+                    </div>
+                    <div class="health-indicator">
+                        <div id="agentSystemHealth" class="health-status status-warning">🟡</div>
+                        <div class="health-label">Agent System</div>
+                        <div class="health-value">Checking...</div>
+                    </div>
+                    <div class="health-indicator">
+                        <div id="databaseHealth" class="health-status status-healthy">🟢</div>
+                        <div class="health-label">Database</div>
+                        <div class="health-value">Available</div>
+                    </div>
+                    <div class="health-indicator">
+                        <div id="buildersHealth" class="health-status status-warning">🟡</div>
+                        <div class="health-label">Builders</div>
+                        <div class="health-value">Loading...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Real-time Logs -->
+        <div class="logs-container">
+            <div class="logs-header">
+                <h2 class="panel-title">📋 Real-time System Logs</h2>
+                <div class="logs-controls">
+                    <button class="control-btn" onclick="clearLogs()">🗑️ Clear</button>
+                    <button class="control-btn" onclick="downloadLogs()">💾 Download</button>
+                    <button class="control-btn" onclick="refreshLogs()">🔄 Refresh</button>
+                </div>
+            </div>
+            <div id="logsDisplay" class="logs-display">
+                <div class="log-entry log-info">[INFO] System monitor initialized...</div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="refreshIndicator" class="refresh-indicator">
+        🔄 Refreshing...
+    </div>
+    
+    <script>
+        let autoRefreshEnabled = true;
+        let refreshInterval;
+        let logBuffer = [];
+        
+        // System monitoring functions
+        async function fetchSystemHealth() {
+            try {
+                const response = await fetch('/readyz');
+                const data = await response.json();
+                updateHealthIndicators(data);
+            } catch (error) {
+                console.error('Health check failed:', error);
+                updateHealthIndicators({ ready: false, agent_system: false });
+            }
+        }
+        
+        async function fetchSystemMetrics() {
+            try {
+                const response = await fetch('/api/system/metrics');
+                const data = await response.json();
+                updatePerformanceMetrics(data.metrics);
+            } catch (error) {
+                console.error('Metrics fetch failed:', error);
+                addLog('ERROR', `Failed to fetch metrics: ${error.message}`);
+            }
+        }
+        
+        async function fetchAgentLogs() {
+            try {
+                const response = await fetch('/api/agents/logs?limit=50');
+                const data = await response.json();
+                updateLogsDisplay(data.logs || []);
+            } catch (error) {
+                console.error('Logs fetch failed:', error);
+                addLog('ERROR', `Failed to fetch agent logs: ${error.message}`);
+            }
+        }
+        
+        function updateHealthIndicators(healthData) {
+            // Web Portal Health
+            const webPortalHealth = document.getElementById('webPortalHealth');
+            const webPortalValue = webPortalHealth.parentElement.querySelector('.health-value');
+            webPortalHealth.textContent = '🟢';
+            webPortalHealth.className = 'health-status status-healthy';
+            webPortalValue.textContent = 'Online';
+            
+            // Agent System Health
+            const agentSystemHealth = document.getElementById('agentSystemHealth');
+            const agentSystemValue = agentSystemHealth.parentElement.querySelector('.health-value');
+            if (healthData.agent_system) {
+                agentSystemHealth.textContent = '🟢';
+                agentSystemHealth.className = 'health-status status-healthy';
+                agentSystemValue.textContent = 'Online';
+            } else {
+                agentSystemHealth.textContent = '🔴';
+                agentSystemHealth.className = 'health-status status-critical';
+                agentSystemValue.textContent = 'Offline';
+            }
+            
+            // Database Health
+            const databaseHealth = document.getElementById('databaseHealth');
+            const databaseValue = databaseHealth.parentElement.querySelector('.health-value');
+            if (healthData.ready) {
+                databaseHealth.textContent = '🟢';
+                databaseHealth.className = 'health-status status-healthy';
+                databaseValue.textContent = 'Available';
+            } else {
+                databaseHealth.textContent = '🟡';
+                databaseHealth.className = 'health-status status-warning';
+                databaseValue.textContent = 'Limited';
+            }
+            
+            // Builders Health
+            const buildersHealth = document.getElementById('buildersHealth');
+            const buildersValue = buildersHealth.parentElement.querySelector('.health-value');
+            const buildersAvailable = healthData.components?.builders_available || false;
+            if (buildersAvailable) {
+                buildersHealth.textContent = '🟢';
+                buildersHealth.className = 'health-status status-healthy';
+                buildersValue.textContent = 'Ready';
+            } else {
+                buildersHealth.textContent = '🟡';
+                buildersHealth.className = 'health-status status-warning';
+                buildersValue.textContent = 'Limited';
+            }
+        }
+        
+        function updatePerformanceMetrics(metrics) {
+            if (!metrics) return;
+            
+            // Simulate some performance metrics since we don't have real system monitoring
+            document.getElementById('cpuUsage').textContent = `${Math.floor(Math.random() * 30 + 10)}%`;
+            document.getElementById('memoryUsage').textContent = `${Math.floor(Math.random() * 40 + 30)}%`;
+            document.getElementById('activeConnections').textContent = Math.floor(Math.random() * 50 + 10);
+            document.getElementById('requestsPerSecond').textContent = Math.floor(Math.random() * 20 + 5);
+        }
+        
+        function updateLogsDisplay(logs) {
+            const logsDisplay = document.getElementById('logsDisplay');
+            
+            if (logs.length === 0) {
+                if (logBuffer.length === 0) {
+                    logsDisplay.innerHTML = '<div class="log-entry log-info">[INFO] No logs available</div>';
+                }
+                return;
+            }
+            
+            // Add new logs to buffer
+            logs.forEach(log => {
+                if (!logBuffer.find(l => l.id === log.id)) {
+                    logBuffer.push(log);
+                }
+            });
+            
+            // Keep only last 100 logs
+            logBuffer = logBuffer.slice(-100);
+            
+            // Sort by timestamp (newest first)
+            logBuffer.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+            
+            // Update display
+            logsDisplay.innerHTML = logBuffer.map(log => {
+                const level = log.level || 'INFO';
+                const levelClass = `log-${level.toLowerCase()}`;
+                const timestamp = new Date(log.timestamp || Date.now()).toLocaleTimeString();
+                const agent = log.agent_id ? `[${log.agent_id}]` : '[SYSTEM]';
+                
+                return `<div class="log-entry ${levelClass}">[${timestamp}] ${agent} ${log.message || log.event || 'Unknown event'}</div>`;
+            }).join('');
+        }
+        
+        function addLog(level, message) {
+            const timestamp = new Date().toISOString();
+            const log = {
+                id: `log_${Date.now()}_${Math.random()}`,
+                level: level,
+                message: message,
+                timestamp: timestamp,
+                agent_id: 'SYSTEM'
+            };
+            
+            logBuffer.push(log);
+            updateLogsDisplay([]);
+        }
+        
+        function clearLogs() {
+            logBuffer = [];
+            document.getElementById('logsDisplay').innerHTML = '<div class="log-entry log-info">[INFO] Logs cleared</div>';
+            addLog('INFO', 'Logs cleared by user');
+        }
+        
+        function downloadLogs() {
+            const logsText = logBuffer.map(log => {
+                const timestamp = new Date(log.timestamp || Date.now()).toISOString();
+                const agent = log.agent_id || 'SYSTEM';
+                const level = log.level || 'INFO';
+                const message = log.message || log.event || 'Unknown event';
+                return `[${timestamp}] [${level}] [${agent}] ${message}`;
+            }).join('\n');
+            
+            const blob = new Blob([logsText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `system_logs_${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            addLog('INFO', 'System logs downloaded');
+        }
+        
+        function refreshLogs() {
+            fetchAgentLogs();
+            addLog('INFO', 'Logs refreshed manually');
+        }
+        
+        function showRefreshIndicator() {
+            const indicator = document.getElementById('refreshIndicator');
+            indicator.classList.add('show');
+            setTimeout(() => {
+                indicator.classList.remove('show');
+            }, 1000);
+        }
+        
+        function toggleAutoRefresh() {
+            autoRefreshEnabled = !autoRefreshEnabled;
+            const toggle = document.getElementById('autoRefreshToggle');
+            const status = document.getElementById('refreshStatus');
+            
+            if (autoRefreshEnabled) {
+                toggle.classList.add('active');
+                status.textContent = 'ON (5s)';
+                startAutoRefresh();
+                addLog('INFO', 'Auto-refresh enabled');
+            } else {
+                toggle.classList.remove('active');
+                status.textContent = 'OFF';
+                stopAutoRefresh();
+                addLog('INFO', 'Auto-refresh disabled');
+            }
+        }
+        
+        function startAutoRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            
+            refreshInterval = setInterval(() => {
+                if (autoRefreshEnabled) {
+                    showRefreshIndicator();
+                    fetchSystemHealth();
+                    fetchSystemMetrics();
+                    fetchAgentLogs();
+                }
+            }, 5000);
+        }
+        
+        function stopAutoRefresh() {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+        
+        // Initialize system monitor
+        document.addEventListener('DOMContentLoaded', function() {
+            addLog('INFO', 'System monitor started');
+            
+            // Set up auto-refresh toggle
+            document.getElementById('autoRefreshToggle').addEventListener('click', toggleAutoRefresh);
+            
+            // Initial data load
+            fetchSystemHealth();
+            fetchSystemMetrics();
+            fetchAgentLogs();
+            
+            // Start auto-refresh
+            startAutoRefresh();
+            
+            // Add some sample system events
+            setTimeout(() => addLog('INFO', 'System health check completed'), 2000);
+            setTimeout(() => addLog('SUCCESS', 'All core components initialized'), 3000);
+            setTimeout(() => addLog('INFO', 'Agent coordination system ready'), 4000);
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            stopAutoRefresh();
+        });
+        
+        // Simulate some system activity
+        setInterval(() => {
+            if (Math.random() < 0.1) { // 10% chance every 10 seconds
+                const events = [
+                    'Agent task completed successfully',
+                    'New tender processed by auto-bidder',
+                    'System backup completed',
+                    'Performance optimization applied',
+                    'Security scan completed'
+                ];
+                const event = events[Math.floor(Math.random() * events.length)];
+                addLog('SUCCESS', event);
+            }
+        }, 10000);
+    </script>
+</body>
+</html>

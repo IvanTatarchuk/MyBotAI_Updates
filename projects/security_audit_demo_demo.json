@@ -1,0 +1,10 @@
+{
+  "name": "Security Audit Demo",
+  "type": "security",
+  "builder": "security_tools",
+  "features": [
+    "vulnerability_scan",
+    "penetration_test",
+    "compliance"
+  ]
+}
