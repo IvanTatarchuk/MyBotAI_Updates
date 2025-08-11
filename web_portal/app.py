@@ -37,6 +37,13 @@ AUDIT_LOG = LOGS / 'audit.log'
 REVIEWS_FILE = DATA / 'reviews.json'
 MESSAGES_FILE = DATA / 'messages.json'
 
+# Added missing data file constants
+USERS_FILE = DATA / 'users.json'
+SESSIONS_FILE = DATA / 'sessions.json'
+OTPS_FILE = DATA / 'otps.json'
+KYC_FILE = DATA / 'kyc.json'
+ESCROWS_FILE = DATA / 'escrows.json'
+
 for p, default in [
     (TENDERS_FILE, {"tenders": [], "bids": []}),
     (PROFESSIONS_FILE, {"professions": [
