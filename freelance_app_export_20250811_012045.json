@@ -1,0 +1,33 @@
+{
+  "dashboard": {
+    "real_time": {
+      "current_earnings": 10195.726597978071,
+      "active_proposals": 3,
+      "pending_tasks": 5,
+      "online_status": "online",
+      "last_activity": "2025-08-11T01:20:45.863924",
+      "system_health": "excellent",
+      "agent_performance": 97.72342439025985
+    },
+    "analytics": {
+      "total_earnings": 15540.35232403084,
+      "total_proposals": 33,
+      "success_rate": 74.63436746140127,
+      "active_projects": 2,
+      "completed_projects": 30,
+      "average_project_value": 4552.067674815847,
+      "best_performing_platform": "Freelancer",
+      "top_skills": [
+        "AI/ML",
+        "React",
+        "Mobile Development"
+      ]
+    },
+    "notifications": [],
+    "active_projects": [
+      {
+        "id": "proj_1754875245_1119",
+        "title": "Mobile Game Development",
+        "client": "GameStudio Inc",
+        "budget": 8000,
+        "status": 

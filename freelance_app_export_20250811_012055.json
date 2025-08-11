@@ -1,0 +1,44 @@
+{
+  "dashboard": {
+    "real_time": {
+      "current_earnings": 13021.283968782029,
+      "active_proposals": 8,
+      "pending_tasks": 5,
+      "online_status": "online",
+      "last_activity": "2025-08-11T01:20:55.767688",
+      "system_health": "excellent",
+      "agent_performance": 91.5378966944886
+    },
+    "analytics": {
+      "total_earnings": 15755.055191957337,
+      "total_proposals": 22,
+      "success_rate": 70.21926121082036,
+      "active_projects": 3,
+      "completed_projects": 20,
+      "average_project_value": 4417.970160880743,
+      "best_performing_platform": "Freelancer",
+      "top_skills": [
+        "Node.js",
+        "Mobile Development",
+        "React"
+      ]
+    },
+    "notifications": [
+      {
+        "id": "notif_1754875255_2083",
+        "type": "payment_received",
+        "title": "Payment Received",
+        "message": "You received $2,500 for completed project",
+        "timestamp": "2025-08-11T01:20:55.767726",
+        "read": false,
+        "priority": "normal",
+        "data": {}
+      }
+    ],
+    "active_projects": [
+      {
+        "id": "proj_1754875255_9891",
+        "title": "Mobile Game Development",
+        "client": "GameStudio Inc",
+        "budget": 8000,
+        "status": 

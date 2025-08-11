@@ -1,0 +1,29 @@
+{
+  "notifications": {
+    "enabled": true,
+    "sound": true,
+    "vibration": true,
+    "job_alerts": true,
+    "proposal_alerts": true,
+    "payment_alerts": true,
+    "goal_alerts": true
+  },
+  "analytics": {
+    "auto_refresh": true,
+    "refresh_interval": 30,
+    "show_charts": true,
+    "export_data": true
+  },
+  "goals": {
+    "daily_earnings_target": 500,
+    "weekly_earnings_target": 3000,
+    "monthly_earnings_target": 12000,
+    "daily_proposals_target": 5,
+    "weekly_tasks_target": 3
+  },
+  "theme": {
+    "dark_mode": false,
+    "primary_color": "#007AFF",
+    "accent_color": "#FF9500"
+  }
+}
