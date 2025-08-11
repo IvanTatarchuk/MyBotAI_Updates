@@ -1,0 +1,163 @@
+{
+  "dashboard": {
+    "real_time": {
+      "current_earnings": 11591.362764038346,
+      "active_proposals": 4,
+      "pending_tasks": 2,
+      "online_status": "online",
+      "last_activity": "2025-08-11T01:22:24.257284",
+      "system_health": "excellent",
+      "agent_performance": 85.8604722542653
+    },
+    "analytics": {
+      "total_earnings": 9945.540180277985,
+      "total_proposals": 21,
+      "success_rate": 76.01442407358932,
+      "active_projects": 4,
+      "completed_projects": 22,
+      "average_project_value": 2764.8102705596584,
+      "best_performing_platform": "Upwork",
+      "top_skills": [
+        "AI/ML",
+        "Node.js",
+        "Mobile Development"
+      ]
+    },
+    "notifications": [
+      {
+        "id": "notif_1754875255_2083",
+        "type": "payment_received",
+        "title": "Payment Received",
+        "message": "You received $2,500 for completed project",
+        "timestamp": "2025-08-11T01:20:55.767726",
+        "read": false,
+        "priority": "normal",
+        "data": {}
+      }
+    ],
+    "active_projects": [
+      {
+        "id": "proj_1754875344_5958",
+        "title": "Mobile Game Development",
+        "client": "GameStudio Inc",
+        "budget": 8000,
+        "status": "pending",
+        "start_date": "2025-08-11T01:22:24.264097",
+        "deadline": "2025-08-26T01:22:24.264098",
+        "progress": 0,
+        "earnings": 0,
+        "description": "Create Call of Duty Mobile-style game with Kivy"
+      },
+      {
+        "id": "proj_1754875344_4580",
+        "title": "AI Code Analysis System",
+        "client": "TechCorp",
+        "budget": 5000,
+        "status": "pending",
+        "start_date": "2025-08-11T01:22:24.265212",
+        "deadline": "2025-08-23T01:22:24.265213",
+        "progress": 0,
+        "earnings": 0,
+        "description": "Build intelligent code analysis system"
+      }
+    ],
+    "goals": [
+      {
+        "id": "goal_1754875344_6164",
+        "type": "daily_earnings",
+        "target": 500,
+        "current": 0,
+        "deadline": "2025-08-12T01:22:24.258220",
+        "achieved": false,
+        "description": "Earn $500 today"
+      },
+      {
+        "id": "goal_1754875344_4851",
+        "type": "weekly_earnings",
+        "target": 3000,
+        "current": 0,
+        "deadline": "2025-08-18T01:22:24.263397",
+        "achieved": false,
+        "description": "Earn $3,000 this week"
+      }
+    ],
+    "performance_metrics": {
+      "daily_earnings": 11591.362764038346,
+      "weekly_earnings": 2486.3850450694963,
+      "monthly_earnings": 9945.540180277985,
+      "proposal_success_rate": 76.01442407358932,
+      "average_project_duration": 14,
+      "client_satisfaction": 4.9353014656685215,
+      "response_time": 3.7347330673928947,
+      "platform_performance": {
+        "upwork": 94.23332828038203,
+        "freelancer": 80.0851925905945,
+        "fiverr": 76.92491780017033
+      }
+    }
+  },
+  "analytics": {
+    "earnings": {
+      "total": 9945.540180277985,
+      "daily_average": 331.5180060092662,
+      "weekly_average": 2486.3850450694963,
+      "monthly_average": 9945.540180277985,
+      "trend": "increasing"
+    },
+    "projects": {
+      "total": 26,
+      "completed": 22,
+      "active": 4,
+      "success_rate": 76.01442407358932,
+      "average_value": 2764.8102705596584
+    },
+    "proposals": {
+      "total_sent": 21,
+      "success_rate": 76.01442407358932,
+      "average_response_time": "2.5 hours",
+      "conversion_rate": 0.7601442407358933
+    },
+    "platforms": {
+      "best_performing": "Upwork",
+      "upwork_performance": 91.22467945366878,
+      "freelancer_performance": 82.79942483144676,
+      "fiverr_performance": 73.92549962023938
+    },
+    "skills": {
+      "top_skills": [
+        "AI/ML",
+        "Node.js",
+        "Mobile Development"
+      ],
+      "most_demanded": [
+        "Python",
+        "React",
+        "Mobile Development"
+      ],
+      "highest_paying": [
+        "AI/ML",
+        "Blockchain",
+        "Game Development"
+      ]
+    }
+  },
+  "notifications": [
+    {
+      "id": "notif_1754875255_2083",
+      "type": "payment_received",
+      "title": "Payment Received",
+      "message": "You received $2,500 for completed project",
+      "timestamp": "2025-08-11T01:20:55.767726",
+      "read": false,
+      "priority": "normal",
+      "data": {}
+    }
+  ],
+  "projects": [
+    {
+      "id": "proj_1754875344_5958",
+      "title": "Mobile Game Development",
+      "client": "GameStudio Inc",
+      "budget": 8000,
+      "status": "pending",
+      "start_date": 

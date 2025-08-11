@@ -1,0 +1,44 @@
+2025-08-11 01:11:13,792 - INFO - 🤖 Simple Freelance Agent initialized successfully
+2025-08-11 01:11:13,792 - INFO - 🚀 Starting automated job search and proposal system...
+2025-08-11 01:11:13,792 - INFO - 🔍 Searching for jobs (max: 10)...
+2025-08-11 01:11:13,792 - INFO - ✅ Found 5 jobs
+2025-08-11 01:11:13,792 - INFO - 🔍 Found 5 jobs, analyzing top candidates...
+2025-08-11 01:11:13,795 - ERROR - ❌ Error in automated search: maximum recursion depth exceeded
+2025-08-11 01:11:22,589 - INFO - 🤖 Simple Freelance Agent initialized successfully
+2025-08-11 01:11:22,589 - INFO - 🚀 Starting automated job search and proposal system...
+2025-08-11 01:11:22,589 - INFO - 🔍 Searching for jobs (max: 10)...
+2025-08-11 01:11:22,590 - INFO - ✅ Found 5 jobs
+2025-08-11 01:11:22,590 - INFO - 🔍 Found 5 jobs, analyzing top candidates...
+2025-08-11 01:11:22,590 - INFO - 📝 Generating proposal for: Web Application with React and Node.js
+2025-08-11 01:11:22,590 - INFO - 📧 Sending proposal for job: Web Application with React and Node.js
+2025-08-11 01:11:25,501 - INFO - ✅ Proposal sent successfully for Web Application with React and Node.js
+2025-08-11 01:11:25,501 - INFO - ✅ Proposal sent for Web Application with React and Node.js - $3,600.00
+2025-08-11 01:11:25,501 - INFO - 📝 Generating proposal for: Mobile App Development with Python
+2025-08-11 01:11:25,501 - INFO - 📧 Sending proposal for job: Mobile App Development with Python
+2025-08-11 01:11:28,099 - INFO - ✅ Proposal sent successfully for Mobile App Development with Python
+2025-08-11 01:11:28,099 - INFO - ✅ Proposal sent for Mobile App Development with Python - $5,400.00
+2025-08-11 01:11:28,099 - INFO - 🎉 Automated search completed!
+2025-08-11 01:11:28,099 - INFO -    📊 Jobs found: 5
+2025-08-11 01:11:28,100 - INFO -    🔍 Jobs analyzed: 5
+2025-08-11 01:11:28,100 - INFO -    📧 Proposals sent: 2
+2025-08-11 01:11:28,100 - INFO -    ✅ Successful: 2
+2025-08-11 01:11:28,100 - INFO -    💰 Potential earnings: $9,000.00
+2025-08-11 01:54:06,913 - INFO - 🤖 Simple Freelance Agent initialized successfully
+2025-08-11 01:54:06,913 - INFO - 🚀 Starting automated job search and proposal system...
+2025-08-11 01:54:06,914 - INFO - 🔍 Searching for jobs (max: 10)...
+2025-08-11 01:54:06,914 - INFO - ✅ Found 5 jobs
+2025-08-11 01:54:06,914 - INFO - 🔍 Found 5 jobs, analyzing top candidates...
+2025-08-11 01:54:06,914 - INFO - 📝 Generating proposal for: Web Application with React and Node.js
+2025-08-11 01:54:06,914 - INFO - 📧 Sending proposal for job: Web Application with React and Node.js
+2025-08-11 01:54:09,093 - INFO - ✅ Proposal sent successfully for Web Application with React and Node.js
+2025-08-11 01:54:09,093 - INFO - ✅ Proposal sent for Web Application with React and Node.js - $3,600.00
+2025-08-11 01:54:09,094 - INFO - 📝 Generating proposal for: Mobile App Development with Python
+2025-08-11 01:54:09,094 - INFO - 📧 Sending proposal for job: Mobile App Development with Python
+2025-08-11 01:54:11,258 - INFO - ✅ Proposal sent successfully for Mobile App Development with Python
+2025-08-11 01:54:11,258 - INFO - ✅ Proposal sent for Mobile App Development with Python - $5,400.00
+2025-08-11 01:54:11,258 - INFO - 🎉 Automated search completed!
+2025-08-11 01:54:11,258 - INFO -    📊 Jobs found: 5
+2025-08-11 01:54:11,258 - INFO -    🔍 Jobs analyzed: 5
+2025-08-11 01:54:11,258 - INFO -    📧 Proposals sent: 2
+2025-08-11 01:54:11,258 - INFO -    ✅ Successful: 2
+2025-08-11 01:54:11,258 - INFO -    💰 Potential earnings: $9,000.00

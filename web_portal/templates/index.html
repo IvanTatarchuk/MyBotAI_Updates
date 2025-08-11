@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Feliks — AI Portal Przetargów</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div id="consent" class="consent hidden">
+    <div>
+      This site uses minimal cookies and stores only necessary data for tenders. See
+      <a href="/legal/PRIVACY.md" target="_blank">Privacy</a>,
+      <a href="/legal/TERMS.md" target="_blank">Terms</a>,
+      <a href="/legal/COOKIES.md" target="_blank">Cookies</a>.
+    </div>
+    <button id="acceptConsent">I Agree</button>
+  </div>
+
+  <header>
+    <h1>Feliks</h1>
+    <nav>
+      <a href="/pricing" target="_self">Pricing</a>
+      <a href="/legal/PRIVACY.md" target="_blank">Privacy</a>
+      <a href="/legal/TERMS.md" target="_blank">Terms</a>
+      <a href="/legal/COOKIES.md" target="_blank">Cookies</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <section>
+      <h2>Professions</h2>
+      <ul id="professions"></ul>
+    </section>
+
+    <section>
+      <h2>Create Tender</h2>
+      <form id="tenderForm">
+        <label>Title <input name="title" required maxlength="120" /></label>
+        <label>Profession
+          <select name="profession" id="professionSelect" required></select>
+        </label>
+        <label>Budget <input name="budget" type="number" min="0" step="1" required /></label>
+        <label>Deadline <input name="deadline" type="date" required /></label>
+        <label>Contact Email <input name="contact_email" type="email" required /></label>
+        <label>Description <textarea name="description" maxlength="5000"></textarea></label>
+        <label class="consentLabel">
+          <input type="checkbox" name="consent" required /> I consent to data processing for tender purposes
+        </label>
+        <button type="submit">Create</button>
+      </form>
+      <div id="tenderCreateResult" class="result"></div>
+    </section>
+
+    <section>
+      <h2>Open Tenders</h2>
+      <div id="tenders"></div>
+    </section>
+  </main>
+
+  <script src="/static/portal.js"></script>
+</body>
+</html>

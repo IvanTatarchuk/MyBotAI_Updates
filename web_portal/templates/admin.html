@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header><h1>Admin Panel</h1><a href="/">Portal</a></header>
+  <main class="container">
+    <section>
+      <h2>Login (OTP)</h2>
+      <form id="otpRequest">
+        <label>Email <input name="email" type="email" required /></label>
+        <button type="submit">Request OTP</button>
+      </form>
+      <form id="otpLogin">
+        <label>Email <input name="email" type="email" required /></label>
+        <label>Code <input name="code" required /></label>
+        <button type="submit">Login</button>
+      </form>
+      <div id="authResult" class="result"></div>
+    </section>
+
+    <section>
+      <h2>KYC Approve</h2>
+      <form id="kycApprove">
+        <label>User email <input name="email" type="email" required /></label>
+        <button type="submit">Approve</button>
+      </form>
+      <div id="kycResult" class="result"></div>
+    </section>
+
+    <section>
+      <h2>Analytics</h2>
+      <pre id="analytics"></pre>
+    </section>
+  </main>
+
+  <script>
+async function post(url, payload){
+  const r = await fetch(url, {method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)}); return r.json(); }
+async function get(url){ const r = await fetch(url); return r.json(); }
+
+const otpRequest = document.getElementById('otpRequest');
+const otpLogin = document.getElementById('otpLogin');
+const authResult = document.getElementById('authResult');
+const kycApprove = document.getElementById('kycApprove');
+const kycResult = document.getElementById('kycResult');
+const analytics = document.getElementById('analytics');
+
+otpRequest.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const email = new FormData(otpRequest).get('email');
+  const res = await post('/api/auth/request_otp',{email, role:'admin'});
+  authResult.textContent = res.ok ? ('Dev OTP: '+res.dev_code) : ('Error: '+(res.error||'unknown'));
+});
+
+otpLogin.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const fd = new FormData(otpLogin);
+  const res = await post('/api/auth/login',{email: fd.get('email'), code: fd.get('code')});
+  authResult.textContent = res.ok ? 'Logged in' : ('Error: '+(res.error||'unknown'));
+  if (res.ok) loadAnalytics();
+});
+
+kycApprove.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const email = new FormData(kycApprove).get('email');
+  const res = await post('/api/admin/kyc/approve', {email});
+  kycResult.textContent = res.ok ? 'Approved' : ('Error: '+(res.error||'unknown'));
+  if (res.ok) loadAnalytics();
+});
+
+async function loadAnalytics(){
+  const d = await get('/api/admin/analytics');
+  analytics.textContent = JSON.stringify(d, null, 2);
+}
+
+  </script>
+</body>
+</html>
