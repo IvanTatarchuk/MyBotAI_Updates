@@ -1,0 +1,18 @@
+body { font-family: system-ui, Arial, sans-serif; margin: 0; color: #111; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #0b5; color: #fff; }
+header a { color: #fff; margin-left: 12px; text-decoration: underline; }
+.container { padding: 16px; display: grid; grid-template-columns: 1fr; gap: 24px; }
+label { display: block; margin: 8px 0; }
+input, textarea, select { width: 100%; padding: 8px; box-sizing: border-box; }
+button { padding: 8px 12px; background: #0b5; color: #fff; border: 0; border-radius: 4px; cursor: pointer; }
+button.secondary { background: #0366d6; }
+.card { border: 1px solid #ddd; padding: 12px; border-radius: 6px; margin: 8px 0; }
+.muted { color: #666; font-size: 12px; }
+.inlineForm { display: grid; grid-template-columns: 1fr 140px 1fr auto; gap: 8px; align-items: center; margin-top: 8px; }
+.result { margin-top: 8px; color: #0a0; }
+
+/* Consent */
+.consent { position: fixed; left: 0; right: 0; bottom: 0; background: #222; color: #fff; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; z-index: 9999; }
+.consent.hidden { display: none; }
+.consent a { color: #0b5; }
+.consent button { background: #0b5; }
