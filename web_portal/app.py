@@ -196,6 +196,10 @@ def application(environ, start_response):
         return _serve_file(start_response, TEMPLATES / 'index.html', 'text/html; charset=utf-8')
     if path == '/admin':
         return _serve_file(start_response, TEMPLATES / 'admin.html', 'text/html; charset=utf-8')
+    if path == '/pricing':
+        return _serve_file(start_response, TEMPLATES / 'pricing.html', 'text/html; charset=utf-8')
+    if path == '/landing':
+        return _serve_file(start_response, TEMPLATES / 'landing.html', 'text/html; charset=utf-8')
 
     # Healthchecks
     if path == '/healthz':
