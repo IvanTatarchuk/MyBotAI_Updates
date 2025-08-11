@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Agents Management - Zarządzanie Agentami</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.2em;
+            margin-bottom: 15px;
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .nav-link {
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+        
+        .agents-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .section-header {
+            font-size: 1.8em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 25px;
+        }
+        
+        .agent-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .agent-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .agent-card.active {
+            border-color: #2ecc71;
+        }
+        
+        .agent-card.inactive {
+            border-color: #e74c3c;
+        }
+        
+        .agent-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .agent-name {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .agent-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        
+        .status-active {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .status-inactive {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .status-idle {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .agent-type {
+            background: #ecf0f1;
+            color: #34495e;
+            padding: 8px 15px;
+            border-radius: 12px;
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+        
+        .agent-capabilities {
+            margin-bottom: 15px;
+        }
+        
+        .capability-tag {
+            background: #3498db;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin: 2px;
+            display: inline-block;
+        }
+        
+        .agent-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .stat-number {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #3498db;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        
+        .agent-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .control-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+        
+        .start-btn {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .start-btn:hover {
+            background: #27ae60;
+        }
+        
+        .stop-btn {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .stop-btn:hover {
+            background: #c0392b;
+        }
+        
+        .logs-btn {
+            background: #9b59b6;
+            color: white;
+        }
+        
+        .logs-btn:hover {
+            background: #8e44ad;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+            font-size: 1.2em;
+        }
+        
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .success {
+            background: #2ecc71;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Agents Management</h1>
+            <div class="nav-links">
+                <a href="/dashboard" class="nav-link">📊 Dashboard</a>
+                <a href="/" class="nav-link">🏠 Home</a>
+                <a href="/builders" class="nav-link">🛠️ Builders</a>
+                <a href="/system" class="nav-link">⚙️ System</a>
+                <a href="/admin" class="nav-link">👑 Admin</a>
+            </div>
+        </div>
+        
+        <div id="messages"></div>
+        
+        <div class="agents-container">
+            <h2 class="section-header">🤖 All Agents</h2>
+            <div id="agentsGrid" class="agents-grid">
+                <div class="loading">Loading agents...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        async function fetchAgents() {
+            try {
+                const response = await fetch('/api/agents/list');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                updateAgents(data.agents || []);
+            } catch (error) {
+                console.error('Error fetching agents:', error);
+                showMessage('Failed to fetch agents: ' + error.message, 'error');
+            }
+        }
+        
+        function updateAgents(agents) {
+            const agentsGrid = document.getElementById('agentsGrid');
+            
+            if (agents.length === 0) {
+                agentsGrid.innerHTML = '<div class="loading">No agents available</div>';
+                return;
+            }
+            
+            agentsGrid.innerHTML = agents.map(agent => {
+                const statusClass = agent.status === 'active' ? 'active' : 'inactive';
+                const statusBadgeClass = `status-${agent.status}`;
+                
+                return `
+                    <div class="agent-card ${statusClass}">
+                        <div class="agent-header">
+                            <div class="agent-name">${agent.name}</div>
+                            <div class="agent-status ${statusBadgeClass}">${agent.status}</div>
+                        </div>
+                        <div class="agent-type">${agent.type}</div>
+                        
+                        <div class="agent-capabilities">
+                            <strong>Capabilities:</strong><br>
+                            ${(agent.capabilities || []).map(cap => 
+                                `<span class="capability-tag">${cap}</span>`
+                            ).join('')}
+                        </div>
+                        
+                        <div class="agent-stats">
+                            <div class="stat-item">
+                                <div class="stat-number">${agent.tasks_completed || 0}</div>
+                                <div class="stat-label">Tasks Completed</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number">${agent.performance_score || 0}%</div>
+                                <div class="stat-label">Performance</div>
+                            </div>
+                        </div>
+                        
+                        <div class="agent-controls">
+                            <button class="control-btn start-btn" onclick="startAgent('${agent.id}')">
+                                ▶️ Start
+                            </button>
+                            <button class="control-btn stop-btn" onclick="stopAgent('${agent.id}')">
+                                ⏹️ Stop
+                            </button>
+                            <button class="control-btn logs-btn" onclick="viewLogs('${agent.id}')">
+                                📋 Logs
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        async function startAgent(agentId) {
+            try {
+                const response = await fetch('/api/agents/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ agent_id: agentId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.ok) {
+                    showMessage(`Agent ${agentId} started successfully!`, 'success');
+                    fetchAgents(); // Refresh agents list
+                } else {
+                    showMessage(`Failed to start agent: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`Error starting agent: ${error.message}`, 'error');
+            }
+        }
+        
+        async function stopAgent(agentId) {
+            try {
+                const response = await fetch('/api/agents/stop', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ agent_id: agentId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.ok) {
+                    showMessage(`Agent ${agentId} stopped successfully!`, 'success');
+                    fetchAgents(); // Refresh agents list
+                } else {
+                    showMessage(`Failed to stop agent: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage(`Error stopping agent: ${error.message}`, 'error');
+            }
+        }
+        
+        function viewLogs(agentId) {
+            // Open logs in new window/tab
+            window.open(`/api/agents/logs?agent_id=${agentId}`, '_blank');
+        }
+        
+        function showMessage(message, type) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            messagesDiv.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchAgents();
+            
+            // Auto-refresh every 15 seconds
+            setInterval(fetchAgents, 15000);
+        });
+    </script>
+</body>
+</html>

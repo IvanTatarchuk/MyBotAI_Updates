@@ -1,0 +1,10 @@
+{
+  "name": "ML Pipeline Demo",
+  "type": "ml",
+  "builder": "ml_tools",
+  "features": [
+    "data_processing",
+    "model_training",
+    "deployment"
+  ]
+}

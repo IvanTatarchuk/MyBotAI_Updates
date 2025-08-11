@@ -1,0 +1,10 @@
+{
+  "name": "Mobile Game Demo",
+  "type": "game",
+  "builder": "mobile_game",
+  "features": [
+    "fps",
+    "multiplayer",
+    "ai_enemies"
+  ]
+}

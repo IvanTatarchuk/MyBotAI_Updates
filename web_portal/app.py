@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-🌐 Web Portal (stdlib-only WSGI)
+🌐 Web Portal - Maksymalna Funkcjonalność (stdlib-only WSGI)
 - Tenders portal for multiple professions
 - Profession-specific agents auto-bidding
+- Agent management and monitoring
+- Real-time system dashboard
 - GDPR-style compliance: consent, privacy-first logging, legal docs
 """
 from wsgiref.simple_server import make_server
@@ -17,6 +19,8 @@ import base64
 import hmac
 import struct
 import time
+import threading
+import logging
 
 BASE = Path(__file__).resolve().parent
 DATA = BASE / 'data'
@@ -24,24 +28,39 @@ STATIC = BASE / 'static'
 TEMPLATES = BASE / 'templates'
 LOGS = BASE / 'logs'
 LEGAL = BASE / 'legal'
+AGENTS_DATA = BASE / 'agents_data'
 
-DATA.mkdir(parents=True, exist_ok=True)
-LOGS.mkdir(parents=True, exist_ok=True)
+# Create all necessary directories
+for directory in [DATA, LOGS, AGENTS_DATA]:
+    directory.mkdir(parents=True, exist_ok=True)
 
 TENDERS_FILE = DATA / 'tenders.json'
 PROFESSIONS_FILE = DATA / 'professions.json'
 ERASURE_FILE = DATA / 'erasure_requests.json'
+USERS_FILE = DATA / 'users.json'
+SESSIONS_FILE = DATA / 'sessions.json'
+OTPS_FILE = DATA / 'otps.json'
+KYC_FILE = DATA / 'kyc.json'
+ESCROWS_FILE = DATA / 'escrows.json'
 AUDIT_LOG = LOGS / 'audit.log'
+
+# New agent management files
+AGENTS_FILE = AGENTS_DATA / 'agents.json'
+TASKS_FILE = AGENTS_DATA / 'tasks.json'
+SYSTEM_STATUS_FILE = AGENTS_DATA / 'system_status.json'
+AGENT_LOGS_FILE = AGENTS_DATA / 'agent_logs.json'
 
 # 2FA / Reviews / Messages data files
 REVIEWS_FILE = DATA / 'reviews.json'
 MESSAGES_FILE = DATA / 'messages.json'
 
+# Initialize all data files with defaults
 for p, default in [
     (TENDERS_FILE, {"tenders": [], "bids": []}),
     (PROFESSIONS_FILE, {"professions": [
         "Software Developer", "Designer", "Engineer", "Marketer",
-        "Data Scientist", "Translator", "Writer", "Consultant"
+        "Data Scientist", "Translator", "Writer", "Consultant",
+        "AI Specialist", "Security Expert", "DevOps Engineer", "Game Developer"
     ]}),
     (ERASURE_FILE, {"requests": []}),
     (USERS_FILE, {"users": []}),
@@ -51,9 +70,37 @@ for p, default in [
     (ESCROWS_FILE, {"escrows": []}),
     (REVIEWS_FILE, {"reviews": []}),
     (MESSAGES_FILE, {"messages": []}),
+    (AGENTS_FILE, {"agents": [], "last_updated": ""}),
+    (TASKS_FILE, {"tasks": [], "completed_tasks": []}),
+    (SYSTEM_STATUS_FILE, {"status": "offline", "uptime": 0, "agents_count": 0, "last_check": ""}),
+    (AGENT_LOGS_FILE, {"logs": []}),
 ]:
     if not p.exists():
         p.write_text(json.dumps(default, indent=2), encoding='utf-8')
+
+# Try to import agent system components
+try:
+    import sys
+    sys.path.append('/workspace')
+    from simple_master_coordinator import SimpleMasterCoordinator
+    from web_framework_builder import WebFrameworkBuilder
+    from security_tools_builder import SecurityToolsBuilder
+    from mobile_game_builder import MobileGameBuilder
+    
+    # Initialize agent coordinator
+    AGENT_COORDINATOR = SimpleMasterCoordinator()
+    BUILDERS = {
+        'web': WebFrameworkBuilder(),
+        'security': SecurityToolsBuilder(),
+        'mobile': MobileGameBuilder()
+    }
+    SYSTEM_READY = True
+    print("🤖 Agent system integrated successfully!")
+except Exception as e:
+    print(f"⚠️ Agent system not available: {e}")
+    AGENT_COORDINATOR = None
+    BUILDERS = {}
+    SYSTEM_READY = False
 
 
 def _json_response(start_response, data, status='200 OK', headers=None):
@@ -200,14 +247,34 @@ def application(environ, start_response):
         return _serve_file(start_response, TEMPLATES / 'pricing.html', 'text/html; charset=utf-8')
     if path == '/landing':
         return _serve_file(start_response, TEMPLATES / 'landing.html', 'text/html; charset=utf-8')
+    
+    # New agent dashboard pages
+    if path == '/dashboard':
+        return _serve_file(start_response, TEMPLATES / 'dashboard.html', 'text/html; charset=utf-8')
+    if path == '/agents':
+        return _serve_file(start_response, TEMPLATES / 'agents.html', 'text/html; charset=utf-8')
+    if path == '/builders':
+        return _serve_file(start_response, TEMPLATES / 'builders.html', 'text/html; charset=utf-8')
+    if path == '/system':
+        return _serve_file(start_response, TEMPLATES / 'system.html', 'text/html; charset=utf-8')
 
     # Healthchecks
     if path == '/healthz':
         return _json_response(start_response, {"status":"ok"})
     if path == '/readyz':
-        # simple readiness (files exist)
-        ok = all(p.exists() for p in [TENDERS_FILE, PROFESSIONS_FILE])
-        return _json_response(start_response, {"ready": bool(ok)})
+        # Enhanced readiness check including agent system
+        basic_ok = all(p.exists() for p in [TENDERS_FILE, PROFESSIONS_FILE])
+        agent_ok = SYSTEM_READY and AGENT_COORDINATOR is not None
+        return _json_response(start_response, {
+            "ready": bool(basic_ok), 
+            "agent_system": bool(agent_ok),
+            "components": {
+                "basic_files": basic_ok,
+                "agent_coordinator": agent_ok,
+                "builders_available": len(BUILDERS) > 0
+            }
+        })
+    
     if path.startswith('/static/'):
         rel = path[len('/static/'):]
         f = STATIC / rel
@@ -220,7 +287,378 @@ def application(environ, start_response):
         ctype = 'text/markdown; charset=utf-8'
         return _serve_file(start_response, f, ctype)
 
-    # API endpoints
+    # NEW AGENT MANAGEMENT API ENDPOINTS
+    
+    # System status endpoint
+    if path == '/api/system/status' and method == 'GET':
+        if not SYSTEM_READY:
+            return _json_response(start_response, {
+                "status": "offline", 
+                "message": "Agent system not available",
+                "agents": [],
+                "tasks": []
+            })
+        
+        try:
+            # Get current system status
+            agents_info = []
+            if AGENT_COORDINATOR:
+                for agent_id, agent in AGENT_COORDINATOR.agents.items():
+                    agents_info.append({
+                        "id": agent_id,
+                        "name": agent.name,
+                        "type": agent.agent_type.value,
+                        "status": agent.status.value,
+                        "last_activity": agent.last_activity,
+                        "tasks_completed": agent.tasks_completed,
+                        "performance_score": agent.performance_score
+                    })
+            
+            tasks_info = []
+            if AGENT_COORDINATOR:
+                for task in list(AGENT_COORDINATOR.task_queue.queue):
+                    tasks_info.append({
+                        "id": task.task_id,
+                        "type": task.task_type,
+                        "priority": task.priority,
+                        "status": task.status.value,
+                        "assigned_agent": task.assigned_agent,
+                        "created_at": task.created_at
+                    })
+            
+            status = {
+                "status": "online",
+                "uptime": time.time() - getattr(AGENT_COORDINATOR, 'start_time', time.time()),
+                "agents": agents_info,
+                "tasks": tasks_info,
+                "system_load": len(tasks_info),
+                "last_check": _now_iso()
+            }
+            
+            # Save status for persistence
+            _save_json(SYSTEM_STATUS_FILE, status)
+            return _json_response(start_response, status)
+            
+        except Exception as e:
+            return _json_response(start_response, {
+                "status": "error", 
+                "message": str(e)
+            }, '500 Internal Server Error')
+    
+    # Agent control endpoints
+    if path == '/api/agents/list' and method == 'GET':
+        user = _get_user(environ)
+        if not user or user.get('role') != 'admin':
+            return _json_response(start_response, {"error": "Admin only"}, '403 Forbidden')
+        
+        if not SYSTEM_READY:
+            return _json_response(start_response, {"agents": []})
+        
+        agents_list = []
+        if AGENT_COORDINATOR:
+            for agent_id, agent in AGENT_COORDINATOR.agents.items():
+                agents_list.append({
+                    "id": agent_id,
+                    "name": agent.name,
+                    "type": agent.agent_type.value,
+                    "status": agent.status.value,
+                    "capabilities": agent.capabilities,
+                    "last_activity": agent.last_activity,
+                    "tasks_completed": agent.tasks_completed,
+                    "performance_score": agent.performance_score
+                })
+        
+        return _json_response(start_response, {"agents": agents_list})
+    
+    # Task management endpoints
+    if path == '/api/tasks/create' and method == 'POST':
+        user = _get_user(environ)
+        if not user:
+            return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        
+        if not SYSTEM_READY:
+            return _json_response(start_response, {"error": "Agent system offline"}, '503 Service Unavailable')
+        
+        length = int(environ.get('CONTENT_LENGTH') or 0)
+        body = environ['wsgi.input'].read(length) if length else b''
+        try:
+            payload = json.loads(body.decode('utf-8'))
+        except Exception:
+            return _json_response(start_response, {"error": "Invalid JSON"}, '400 Bad Request')
+        
+        task_type = payload.get('task_type', '').strip()
+        description = payload.get('description', '').strip()[:2000]
+        priority = int(payload.get('priority', 1))
+        
+        if not task_type or not description:
+            return _json_response(start_response, {"error": "Task type and description required"}, '400 Bad Request')
+        
+        try:
+            # Create task through coordinator
+            task_result = AGENT_COORDINATOR.create_task(
+                task_type=task_type,
+                description=description,
+                priority=priority,
+                requester=user['email']
+            )
+            
+            _audit('task_create', ip, {"task_type": task_type, "user": user['id']})
+            return _json_response(start_response, {"ok": True, "task": task_result}, '201 Created')
+            
+        except Exception as e:
+            return _json_response(start_response, {"error": str(e)}, '500 Internal Server Error')
+    
+    # Builder endpoints
+    if path == '/api/builders/web/create' and method == 'POST':
+        user = _get_user(environ)
+        if not user:
+            return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        
+        if 'web' not in BUILDERS:
+            return _json_response(start_response, {"error": "Web builder not available"}, '503 Service Unavailable')
+        
+        length = int(environ.get('CONTENT_LENGTH') or 0)
+        body = environ['wsgi.input'].read(length) if length else b''
+        try:
+            payload = json.loads(body.decode('utf-8'))
+        except Exception:
+            return _json_response(start_response, {"error": "Invalid JSON"}, '400 Bad Request')
+        
+        app_name = payload.get('app_name', '').strip()
+        framework = payload.get('framework', 'react').strip()
+        features = payload.get('features', [])
+        
+        if not app_name:
+            return _json_response(start_response, {"error": "App name required"}, '400 Bad Request')
+        
+        try:
+            result = BUILDERS['web'].create_web_application(
+                app_name=app_name,
+                framework=framework,
+                features=features
+            )
+            _audit('web_app_create', ip, {"app_name": app_name, "framework": framework})
+            return _json_response(start_response, {"ok": True, "result": result}, '201 Created')
+            
+        except Exception as e:
+            return _json_response(start_response, {"error": str(e)}, '500 Internal Server Error')
+    
+    if path == '/api/builders/security/create' and method == 'POST':
+        user = _get_user(environ)
+        if not user:
+            return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        
+        if 'security' not in BUILDERS:
+            return _json_response(start_response, {"error": "Security builder not available"}, '503 Service Unavailable')
+        
+        length = int(environ.get('CONTENT_LENGTH') or 0)
+        body = environ['wsgi.input'].read(length) if length else b''
+        try:
+            payload = json.loads(body.decode('utf-8'))
+        except Exception:
+            return _json_response(start_response, {"error": "Invalid JSON"}, '400 Bad Request')
+        
+        tool_name = payload.get('tool_name', '').strip()
+        target_type = payload.get('target_type', 'web_app').strip()
+        compliance = payload.get('compliance', [])
+        
+        if not tool_name:
+            return _json_response(start_response, {"error": "Tool name required"}, '400 Bad Request')
+        
+        try:
+            result = BUILDERS['security'].create_security_tool(
+                tool_name=tool_name,
+                target_type=target_type,
+                compliance=compliance
+            )
+            _audit('security_tool_create', ip, {"tool_name": tool_name, "target_type": target_type})
+            return _json_response(start_response, {"ok": True, "result": result}, '201 Created')
+            
+        except Exception as e:
+            return _json_response(start_response, {"error": str(e)}, '500 Internal Server Error')
+    
+    if path == '/api/builders/mobile/create' and method == 'POST':
+        user = _get_user(environ)
+        if not user:
+            return _json_response(start_response, {"error": "Auth required"}, '401 Unauthorized')
+        
+        if 'mobile' not in BUILDERS:
+            return _json_response(start_response, {"error": "Mobile builder not available"}, '503 Service Unavailable')
+        
+        length = int(environ.get('CONTENT_LENGTH') or 0)
+        body = environ['wsgi.input'].read(length) if length else b''
+        try:
+            payload = json.loads(body.decode('utf-8'))
+        except Exception:
+            return _json_response(start_response, {"error": "Invalid JSON"}, '400 Bad Request')
+        
+        game_name = payload.get('game_name', '').strip()
+        game_type = payload.get('game_type', 'puzzle').strip()
+        platform = payload.get('platform', 'android').strip()
+        
+        if not game_name:
+            return _json_response(start_response, {"error": "Game name required"}, '400 Bad Request')
+        
+        try:
+            result = BUILDERS['mobile'].create_mobile_game(
+                game_name=game_name,
+                game_type=game_type,
+                platform=platform
+            )
+            _audit('mobile_game_create', ip, {"game_name": game_name, "game_type": game_type})
+            return _json_response(start_response, {"ok": True, "result": result}, '201 Created')
+            
+        except Exception as e:
+            return _json_response(start_response, {"error": str(e)}, '500 Internal Server Error')
+    
+    # Agent logs endpoint
+    if path == '/api/agents/logs' and method == 'GET':
+        user = _get_user(environ)
+        if not user or user.get('role') != 'admin':
+            return _json_response(start_response, {"error": "Admin only"}, '403 Forbidden')
+        
+        qs = parse_qs(environ.get('QUERY_STRING') or '')
+        agent_id = qs.get('agent_id', [''])[0]
+        limit = int(qs.get('limit', ['100'])[0])
+        
+        logs_data = _load_json(AGENT_LOGS_FILE)
+        logs = logs_data.get('logs', [])
+        
+        if agent_id:
+            logs = [log for log in logs if log.get('agent_id') == agent_id]
+        
+        # Return most recent logs first
+        logs = sorted(logs, key=lambda x: x.get('timestamp', ''), reverse=True)[:limit]
+        
+        return _json_response(start_response, {"logs": logs})
+    
+    # Real-time metrics endpoint
+    if path == '/api/system/metrics' and method == 'GET':
+        user = _get_user(environ)
+        if not user or user.get('role') != 'admin':
+            return _json_response(start_response, {"error": "Admin only"}, '403 Forbidden')
+        
+        if not SYSTEM_READY:
+            return _json_response(start_response, {
+                "metrics": {
+                    "system_status": "offline",
+                    "total_agents": 0,
+                    "active_agents": 0,
+                    "total_tasks": 0,
+                    "completed_tasks": 0,
+                    "success_rate": 0.0
+                }
+            })
+        
+        try:
+            # Calculate real-time metrics
+            total_agents = len(AGENT_COORDINATOR.agents) if AGENT_COORDINATOR else 0
+            active_agents = sum(1 for agent in AGENT_COORDINATOR.agents.values() 
+                              if agent.status.value == 'active') if AGENT_COORDINATOR else 0
+            
+            tasks_data = _load_json(TASKS_FILE)
+            total_tasks = len(tasks_data.get('tasks', []))
+            completed_tasks = len(tasks_data.get('completed_tasks', []))
+            success_rate = (completed_tasks / max(1, total_tasks)) * 100
+            
+            # System performance metrics
+            uptime = time.time() - getattr(AGENT_COORDINATOR, 'start_time', time.time()) if AGENT_COORDINATOR else 0
+            
+            metrics = {
+                "system_status": "online" if SYSTEM_READY else "offline",
+                "uptime_seconds": uptime,
+                "total_agents": total_agents,
+                "active_agents": active_agents,
+                "idle_agents": total_agents - active_agents,
+                "total_tasks": total_tasks,
+                "completed_tasks": completed_tasks,
+                "pending_tasks": total_tasks - completed_tasks,
+                "success_rate": round(success_rate, 2),
+                "builders_available": list(BUILDERS.keys()),
+                "last_updated": _now_iso()
+            }
+            
+            return _json_response(start_response, {"metrics": metrics})
+            
+        except Exception as e:
+            return _json_response(start_response, {"error": str(e)}, '500 Internal Server Error')
+    
+    # Agent control endpoints
+    if path == '/api/agents/start' and method == 'POST':
+        user = _get_user(environ)
+        if not user or user.get('role') != 'admin':
+            return _json_response(start_response, {"error": "Admin only"}, '403 Forbidden')
+        
+        if not SYSTEM_READY:
+            return _json_response(start_response, {"error": "Agent system offline"}, '503 Service Unavailable')
+        
+        length = int(environ.get('CONTENT_LENGTH') or 0)
+        body = environ['wsgi.input'].read(length) if length else b''
+        try:
+            payload = json.loads(body.decode('utf-8'))
+        except Exception:
+            return _json_response(start_response, {"error": "Invalid JSON"}, '400 Bad Request')
+        
+        agent_id = payload.get('agent_id', '').strip()
+        
+        try:
+            result = AGENT_COORDINATOR.start_agent(agent_id)
+            _audit('agent_start', ip, {"agent_id": agent_id})
+            return _json_response(start_response, {"ok": True, "result": result})
+            
+        except Exception as e:
+            return _json_response(start_response, {"error": str(e)}, '500 Internal Server Error')
+    
+    if path == '/api/agents/stop' and method == 'POST':
+        user = _get_user(environ)
+        if not user or user.get('role') != 'admin':
+            return _json_response(start_response, {"error": "Admin only"}, '403 Forbidden')
+        
+        if not SYSTEM_READY:
+            return _json_response(start_response, {"error": "Agent system offline"}, '503 Service Unavailable')
+        
+        length = int(environ.get('CONTENT_LENGTH') or 0)
+        body = environ['wsgi.input'].read(length) if length else b''
+        try:
+            payload = json.loads(body.decode('utf-8'))
+        except Exception:
+            return _json_response(start_response, {"error": "Invalid JSON"}, '400 Bad Request')
+        
+        agent_id = payload.get('agent_id', '').strip()
+        
+        try:
+            result = AGENT_COORDINATOR.stop_agent(agent_id)
+            _audit('agent_stop', ip, {"agent_id": agent_id})
+            return _json_response(start_response, {"ok": True, "result": result})
+            
+        except Exception as e:
+            return _json_response(start_response, {"error": str(e)}, '500 Internal Server Error')
+    
+    # Builder capabilities endpoint
+    if path == '/api/builders/capabilities' and method == 'GET':
+        capabilities = {
+            "web": {
+                "frameworks": ["react", "vue", "angular", "next", "nuxt", "svelte"],
+                "backends": ["express", "fastapi", "django", "flask"],
+                "databases": ["postgresql", "mongodb", "mysql", "sqlite"],
+                "features": ["auth", "api", "database", "deployment", "testing"]
+            },
+            "security": {
+                "tools": ["vulnerability_scanner", "penetration_tester", "security_audit", 
+                         "encryption_tool", "network_monitor", "compliance_checker"],
+                "compliance": ["gdpr", "hipaa", "pci_dss", "iso_27001", "nist"],
+                "standards": ["owasp_top10", "sans_top25", "cwe_top25"]
+            },
+            "mobile": {
+                "platforms": ["android", "ios", "cross_platform"],
+                "game_types": ["fps", "racing", "puzzle", "strategy", "arcade"],
+                "engines": ["unity", "unreal", "godot", "custom"]
+            }
+        }
+        
+        return _json_response(start_response, {"capabilities": capabilities})
+
+    # API endpoints (existing)
     if path == '/api/professions' and method == 'GET':
         return _json_response(start_response, _load_json(PROFESSIONS_FILE))
 

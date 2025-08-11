@@ -1,0 +1,10 @@
+{
+  "name": "E-commerce Demo",
+  "type": "web",
+  "builder": "web_framework",
+  "features": [
+    "authentication",
+    "payment",
+    "admin_panel"
+  ]
+}
