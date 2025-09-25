@@ -1,3 +1,72 @@
+## AI Venture Assessor & Idea MVP
+
+An MVP that helps rapidly evaluate product ideas for market potential, pricing, and positioning, with runnable API endpoints you can extend into a full product. The goal: a credible path to a multi-million dollar business by accelerating validation and reducing time-to-market.
+
+### Why this can be worth a couple million dollars
+- **Speed-to-validation**: Shorten idea validation from weeks to hours. Faster cycles mean more shots on goal.
+- **Monetizable workflow**: Package as B2B SaaS for founders, studios, incubators, agencies, and corp innovation teams.
+- **Clear ROI**: Even modest penetration achieves $2M+ ARR (e.g., ~800 orgs x $200/mo).
+
+### Capabilities (MVP)
+- Store and list ideas
+- Assess ideas for market potential (stubbed heuristic today, LLM-pluggable)
+- Generate a concise summary and suggested pricing tiers
+
+### Tech Stack
+- FastAPI, Pydantic, Uvicorn
+- In-memory store (swap with Postgres/Redis later)
+
+### Run locally
+```bash
+python3 -m pip install -r requirements.txt
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Health check:
+```bash
+curl -s http://127.0.0.1:8000/health
+```
+
+### Example usage
+- Create an idea:
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/v1/ideas \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "AI Compliance Copilot",
+    "description": "Automate GDPR gap analysis and evidence collection for audits.",
+    "target_customer": "B2B SaaS companies"
+  }'
+```
+
+- Assess an idea:
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/v1/assess \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "AI Compliance Copilot",
+    "description": "Automate GDPR gap analysis and evidence collection for audits.",
+    "market_size_estimate": 2000000000
+  }'
+```
+
+Or run the helper script (requires `jq`):
+```bash
+chmod +x examples/curl_examples.sh
+./examples/curl_examples.sh
+```
+
+### Pricing and ROI notes
+- **Starter $99/mo**: individuals, solo founders
+- **Team $199–$299/mo**: small teams or agencies
+- **Pro $499–$999/mo**: venture studios, corp innovation
+- **Path to $2M ARR**: e.g., 600 Team + 200 Pro at $200 blended ARPU ≈ $1.6M; upsell/annual plans and professional services bridge the rest.
+
+### Next steps
+- Swap in a real LLM provider via `app/services/llm_adapter.py`
+- Add persistence (Postgres) and background jobs (Celery/RQ)
+- Build an opinionated UI/Flows (Next.js, shadcn/ui)
+
 # 🤖 Programming Agent
 
 An intelligent assistant for software development tasks including code analysis, generation, debugging, and project management.
