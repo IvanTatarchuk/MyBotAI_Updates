@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-platform-prod
+  labels:
+    name: ai-platform-prod
+    environment: production
+    project: enterprise-ai-analytics
+    cost-center: "engineering"
+    compliance: "soc2-gdpr"
+  annotations:
+    description: "Enterprise AI Analytics Platform - Production Environment"
+    owner: "platform-team@company.com"
+    budget: "500000"  # Monthly budget in USD
+    tier: "critical"

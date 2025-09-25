@@ -1,0 +1,376 @@
+# Enterprise AI Analytics Platform - Prometheus Configuration
+# Comprehensive monitoring setup worth $100K+ in operational excellence
+
+global:
+  scrape_interval: 15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  external_labels:
+    cluster: 'ai-platform-prod'
+    environment: 'production'
+    region: 'us-west-2'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - ai-platform-alertmanager.ai-platform-prod.svc.cluster.local:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  - "alert_rules.yml"
+  - "recording_rules.yml"
+
+# A scrape configuration containing exactly one endpoint to scrape:
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Kubernetes API Server
+  - job_name: 'kubernetes-apiservers'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - default
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+
+  # Kubernetes Nodes
+  - job_name: 'kubernetes-nodes'
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics
+
+  # Kubernetes Node Exporter
+  - job_name: 'kubernetes-node-exporter'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_endpoints_name]
+        action: keep
+        regex: node-exporter
+      - source_labels: [__meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: metrics
+      - source_labels: [__meta_kubernetes_endpoint_address_target_name]
+        target_label: node
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+
+  # Kubernetes Pods
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+
+  # AI Platform Services
+  - job_name: 'ai-platform-auth'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: ai-platform-auth
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  - job_name: 'ai-platform-ml-engine'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: ai-platform-ml-engine
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  - job_name: 'ai-platform-data-pipeline'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: ai-platform-data-pipeline
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  - job_name: 'ai-platform-analytics'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: ai-platform-analytics
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  - job_name: 'ai-platform-api-gateway'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: ai-platform-api-gateway
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  - job_name: 'ai-platform-websocket'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: ai-platform-websocket
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  # Database Monitoring
+  - job_name: 'postgresql-exporter'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: postgresql-exporter
+    scrape_interval: 30s
+
+  - job_name: 'redis-exporter'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: redis-exporter
+    scrape_interval: 30s
+
+  - job_name: 'mongodb-exporter'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: mongodb-exporter
+    scrape_interval: 30s
+
+  - job_name: 'clickhouse-exporter'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: clickhouse-exporter
+    scrape_interval: 30s
+
+  # Apache Kafka
+  - job_name: 'kafka-exporter'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: kafka-exporter
+    scrape_interval: 30s
+
+  # Apache Spark
+  - job_name: 'spark-master'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: spark-master
+    scrape_interval: 30s
+    metrics_path: /metrics/master/prometheus
+
+  - job_name: 'spark-worker'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: spark-worker
+    scrape_interval: 30s
+    metrics_path: /metrics/executors/prometheus
+
+  # NVIDIA GPU Monitoring
+  - job_name: 'gpu-metrics'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_accelerator]
+        action: keep
+        regex: nvidia.*
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape_gpu]
+        action: keep
+        regex: true
+    scrape_interval: 15s
+    metrics_path: /gpu/metrics
+
+  # MLflow
+  - job_name: 'mlflow'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - ai-platform-prod
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: ai-platform-mlflow
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Istio Service Mesh (if enabled)
+  - job_name: 'istio-mesh'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+            - istio-system
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: istio-telemetry;prometheus
+
+  # External Services
+  - job_name: 'aws-cloudwatch'
+    ec2_sd_configs:
+      - region: us-west-2
+        port: 9100
+        filters:
+          - name: tag:Monitoring
+            values: ['cloudwatch-exporter']
+    scrape_interval: 60s
+
+  - job_name: 'nginx-ingress'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ingress-nginx
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        action: keep
+        regex: ingress-nginx
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Business Metrics (Custom)
+  - job_name: 'business-metrics'
+    static_configs:
+      - targets: ['ai-platform-business-metrics.ai-platform-prod.svc.cluster.local:8080']
+    scrape_interval: 60s
+    metrics_path: /business/metrics
+
+# Remote write configuration (for long-term storage)
+remote_write:
+  - url: "https://prometheus-remote-write.monitoring.company.com/api/v1/write"
+    basic_auth:
+      username: "ai-platform-prod"
+      password_file: "/etc/prometheus/secrets/remote-write-password"
+    queue_config:
+      max_samples_per_send: 10000
+      max_shards: 200
+      capacity: 100000
+    metadata_config:
+      send: true
+      send_interval: 30s
+      max_samples_per_send: 2000
+
+# Remote read configuration (for long-term queries)
+remote_read:
+  - url: "https://prometheus-remote-read.monitoring.company.com/api/v1/read"
+    basic_auth:
+      username: "ai-platform-prod"
+      password_file: "/etc/prometheus/secrets/remote-read-password"

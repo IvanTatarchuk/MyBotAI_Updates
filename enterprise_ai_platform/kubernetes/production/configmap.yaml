@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-platform-config
+  namespace: ai-platform-prod
+  labels:
+    app: ai-platform
+    component: config
+    environment: production
+data:
+  # Database configurations
+  POSTGRES_HOST: "ai-platform-postgres-primary.ai-platform-prod.svc.cluster.local"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "ai_platform"
+  REDIS_HOST: "ai-platform-redis-master.ai-platform-prod.svc.cluster.local"
+  REDIS_PORT: "6379"
+  MONGODB_HOST: "ai-platform-mongodb.ai-platform-prod.svc.cluster.local"
+  MONGODB_PORT: "27017"
+  CLICKHOUSE_HOST: "ai-platform-clickhouse.ai-platform-prod.svc.cluster.local"
+  CLICKHOUSE_PORT: "8123"
+  
+  # Service discovery
+  AUTH_SERVICE_URL: "http://ai-platform-auth.ai-platform-prod.svc.cluster.local:8000"
+  ML_ENGINE_URL: "http://ai-platform-ml-engine.ai-platform-prod.svc.cluster.local:8000"
+  DATA_PIPELINE_URL: "http://ai-platform-data-pipeline.ai-platform-prod.svc.cluster.local:8000"
+  ANALYTICS_SERVICE_URL: "http://ai-platform-analytics.ai-platform-prod.svc.cluster.local:8000"
+  WEBSOCKET_SERVICE_URL: "http://ai-platform-websocket.ai-platform-prod.svc.cluster.local:8000"
+  
+  # Kafka cluster
+  KAFKA_BROKERS: "ai-platform-kafka-0.ai-platform-kafka-headless.ai-platform-prod.svc.cluster.local:9092,ai-platform-kafka-1.ai-platform-kafka-headless.ai-platform-prod.svc.cluster.local:9092,ai-platform-kafka-2.ai-platform-kafka-headless.ai-platform-prod.svc.cluster.local:9092"
+  
+  # Spark cluster
+  SPARK_MASTER_URL: "spark://ai-platform-spark-master.ai-platform-prod.svc.cluster.local:7077"
+  
+  # MLflow
+  MLFLOW_TRACKING_URI: "http://ai-platform-mlflow.ai-platform-prod.svc.cluster.local:5000"
+  
+  # Monitoring
+  PROMETHEUS_URL: "http://ai-platform-prometheus.ai-platform-prod.svc.cluster.local:9090"
+  GRAFANA_URL: "http://ai-platform-grafana.ai-platform-prod.svc.cluster.local:3000"
+  
+  # External services
+  AWS_REGION: "us-west-2"
+  AZURE_REGION: "eastus"
+  GCP_REGION: "us-central1"
+  
+  # Application settings
+  LOG_LEVEL: "INFO"
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  API_VERSION: "v1"
+  
+  # Security settings
+  CORS_ORIGINS: "https://ai-platform.company.com,https://admin.company.com"
+  SESSION_TIMEOUT: "3600"  # 1 hour
+  TOKEN_EXPIRY: "1800"     # 30 minutes
+  
+  # Performance settings
+  MAX_CONNECTIONS: "1000"
+  CONNECTION_POOL_SIZE: "20"
+  WORKER_PROCESSES: "4"
+  WORKER_THREADS: "8"
+  
+  # Feature flags
+  FEATURE_AUTOML: "true"
+  FEATURE_REALTIME_ANALYTICS: "true"
+  FEATURE_COMPUTER_VISION: "true"
+  FEATURE_NLP: "true"
+  FEATURE_DEEP_LEARNING: "true"
+  FEATURE_FEDERATED_LEARNING: "false"  # Coming soon
+  
+  # ML model settings
+  MODEL_REGISTRY_URL: "s3://ai-platform-models-prod/"
+  ARTIFACT_STORE_URL: "s3://ai-platform-artifacts-prod/"
+  MAX_MODEL_SIZE: "10GB"
+  MODEL_CACHE_SIZE: "50GB"
+  
+  # Data settings
+  DATA_RETENTION_DAYS: "2555"  # 7 years for compliance
+  BACKUP_FREQUENCY: "daily"
+  BACKUP_RETENTION_DAYS: "90"
+  
+  # Compliance settings
+  GDPR_ENABLED: "true"
+  DATA_ENCRYPTION_AT_REST: "true"
+  DATA_ENCRYPTION_IN_TRANSIT: "true"
+  AUDIT_LOGGING: "true"
+  PII_DETECTION: "true"

@@ -1,0 +1,356 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-platform-ml-engine
+  namespace: ai-platform-prod
+  labels:
+    app: ai-platform
+    component: ml-engine
+    environment: production
+    tier: backend
+    version: v1.0.0
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    description: "ML Engine service for training and inference"
+    cost-per-hour: "50"  # USD
+spec:
+  replicas: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: ai-platform
+      component: ml-engine
+  template:
+    metadata:
+      labels:
+        app: ai-platform
+        component: ml-engine
+        environment: production
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ai-platform-ml-engine
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - amd64
+              - key: node-type
+                operator: In
+                values:
+                - gpu-enabled
+                - cpu-optimized
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - ml-engine
+              topologyKey: kubernetes.io/hostname
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "high-memory"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      containers:
+      - name: ml-engine
+        image: ai-platform/ml-engine:v1.0.0-gpu
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        - containerPort: 8001
+          name: grpc
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: ai-platform-config
+              key: ENVIRONMENT
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: ai-platform-config
+              key: LOG_LEVEL
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: ai-platform-secrets
+              key: ml-database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: ai-platform-secrets
+              key: redis-url
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            configMapKeyRef:
+              name: ai-platform-config
+              key: MLFLOW_TRACKING_URI
+        - name: CUDA_VISIBLE_DEVICES
+          value: "all"
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "all"
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: "compute,utility"
+        envFrom:
+        - configMapRef:
+            name: ai-platform-config
+        resources:
+          requests:
+            cpu: "2"
+            memory: "8Gi"
+            nvidia.com/gpu: "1"
+            ephemeral-storage: "10Gi"
+          limits:
+            cpu: "8"
+            memory: "32Gi"
+            nvidia.com/gpu: "2"
+            ephemeral-storage: "50Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 30
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+          readOnly: false
+        - name: dataset-storage
+          mountPath: /app/datasets
+          readOnly: true
+        - name: tmp-storage
+          mountPath: /tmp
+          readOnly: false
+        - name: gpu-libs
+          mountPath: /usr/local/nvidia
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      - name: metrics-exporter
+        image: prom/node-exporter:latest
+        ports:
+        - containerPort: 9100
+          name: metrics
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+        volumeMounts:
+        - name: proc
+          mountPath: /host/proc
+          readOnly: true
+        - name: sys
+          mountPath: /host/sys
+          readOnly: true
+        args:
+        - '--path.procfs=/host/proc'
+        - '--path.sysfs=/host/sys'
+        - '--collector.filesystem.ignored-mount-points'
+        - '^/(dev|proc|sys|var/lib/docker/.+)($|/)'
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: ai-platform-model-storage
+      - name: dataset-storage
+        persistentVolumeClaim:
+          claimName: ai-platform-dataset-storage
+      - name: tmp-storage
+        emptyDir:
+          sizeLimit: "10Gi"
+      - name: gpu-libs
+        hostPath:
+          path: /usr/local/nvidia
+          type: Directory
+      - name: proc
+        hostPath:
+          path: /proc
+          type: Directory
+      - name: sys
+        hostPath:
+          path: /sys
+          type: Directory
+      imagePullSecrets:
+      - name: ai-platform-registry-secret
+      nodeSelector:
+        kubernetes.io/os: linux
+        accelerator: nvidia-tesla-v100  # or nvidia-tesla-k80, nvidia-tesla-p100
+      terminationGracePeriodSeconds: 120
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-platform-ml-engine
+  namespace: ai-platform-prod
+  labels:
+    app: ai-platform
+    component: ml-engine
+    environment: production
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP
+    name: grpc
+  - port: 9100
+    targetPort: 9100
+    protocol: TCP
+    name: metrics
+  selector:
+    app: ai-platform
+    component: ml-engine
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ai-platform-ml-engine-pdb
+  namespace: ai-platform-prod
+  labels:
+    app: ai-platform
+    component: ml-engine
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app: ai-platform
+      component: ml-engine
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-platform-ml-engine-hpa
+  namespace: ai-platform-prod
+  labels:
+    app: ai-platform
+    component: ml-engine
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-platform-ml-engine
+  minReplicas: 5
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Resource
+    resource:
+      name: nvidia.com/gpu
+      target:
+        type: Utilization
+        averageUtilization: 85
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60

@@ -1,0 +1,463 @@
+# Enterprise AI Analytics Platform - Alert Rules
+# Comprehensive alerting for production system worth $50K+ in reliability
+
+groups:
+  # ===============================
+  # Infrastructure Alerts
+  # ===============================
+  - name: infrastructure
+    interval: 30s
+    rules:
+      # Node/Instance Health
+      - alert: NodeDown
+        expr: up{job="kubernetes-nodes"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+          runbook: "https://runbooks.company.com/alerts/node-down"
+        annotations:
+          summary: "Node {{ $labels.instance }} is down"
+          description: "Node {{ $labels.instance }} has been down for more than 5 minutes."
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage on {{ $labels.instance }} has been above 85% for more than 10 minutes."
+
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Critical CPU usage on {{ $labels.instance }}"
+          description: "CPU usage on {{ $labels.instance }} has been above 95% for more than 5 minutes."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage on {{ $labels.instance }} has been above 85% for more than 10 minutes."
+
+      - alert: CriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Critical memory usage on {{ $labels.instance }}"
+          description: "Memory usage on {{ $labels.instance }} has been above 95% for more than 5 minutes."
+
+      - alert: DiskSpaceWarning
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 80
+        for: 15m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Disk space warning on {{ $labels.instance }}"
+          description: "Disk usage on {{ $labels.instance }} mount {{ $labels.mountpoint }} has been above 80% for more than 15 minutes."
+
+      - alert: DiskSpaceCritical
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Critical disk space on {{ $labels.instance }}"
+          description: "Disk usage on {{ $labels.instance }} mount {{ $labels.mountpoint }} has been above 90% for more than 5 minutes."
+
+      - alert: HighNetworkTraffic
+        expr: rate(node_network_receive_bytes_total{device!="lo"}[5m]) + rate(node_network_transmit_bytes_total{device!="lo"}[5m]) > 100000000  # 100MB/s
+        for: 10m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High network traffic on {{ $labels.instance }}"
+          description: "Network traffic on {{ $labels.instance }} interface {{ $labels.device }} has been above 100MB/s for more than 10 minutes."
+
+  # ===============================
+  # Kubernetes Alerts
+  # ===============================
+  - name: kubernetes
+    interval: 30s
+    rules:
+      # Pod Health
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: kubernetes
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
+          description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been restarting frequently."
+
+      - alert: PodNotReady
+        expr: kube_pod_status_ready{condition="false"} == 1
+        for: 10m
+        labels:
+          severity: warning
+          component: kubernetes
+        annotations:
+          summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} not ready"
+          description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been in a non-ready state for more than 10 minutes."
+
+      - alert: DeploymentReplicasMismatch
+        expr: kube_deployment_spec_replicas != kube_deployment_status_available_replicas
+        for: 10m
+        labels:
+          severity: warning
+          component: kubernetes
+        annotations:
+          summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} replica mismatch"
+          description: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} has {{ $value }} available replicas, expected {{ $labels.spec_replicas }}."
+
+      - alert: StatefulSetReplicasMismatch
+        expr: kube_statefulset_status_replicas_ready != kube_statefulset_status_replicas
+        for: 10m
+        labels:
+          severity: warning
+          component: kubernetes
+        annotations:
+          summary: "StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} replica mismatch"
+          description: "StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} has {{ $value }} ready replicas out of {{ $labels.replicas }}."
+
+      - alert: HorizontalPodAutoscalerSyncFailing
+        expr: rate(kube_hpa_status_condition{condition="ScalingActive",status="false"}[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: kubernetes
+        annotations:
+          summary: "HPA {{ $labels.namespace }}/{{ $labels.hpa }} sync failing"
+          description: "HPA {{ $labels.namespace }}/{{ $labels.hpa }} has not been able to sync for more than 10 minutes."
+
+  # ===============================
+  # Application Alerts
+  # ===============================
+  - name: application
+    interval: 30s
+    rules:
+      # Service Health
+      - alert: ServiceDown
+        expr: up{job=~"ai-platform-.*"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: application
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 5 minutes."
+
+      - alert: HighErrorRate
+        expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])) * 100 > 5
+        for: 10m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Error rate on {{ $labels.job }} has been above 5% for more than 10 minutes."
+
+      - alert: CriticalErrorRate
+        expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])) * 100 > 20
+        for: 5m
+        labels:
+          severity: critical
+          component: application
+        annotations:
+          summary: "Critical error rate on {{ $labels.job }}"
+          description: "Error rate on {{ $labels.job }} has been above 20% for more than 5 minutes."
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 10m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "High response time on {{ $labels.job }}"
+          description: "95th percentile response time on {{ $labels.job }} has been above 2 seconds for more than 10 minutes."
+
+      - alert: CriticalResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: critical
+          component: application
+        annotations:
+          summary: "Critical response time on {{ $labels.job }}"
+          description: "95th percentile response time on {{ $labels.job }} has been above 5 seconds for more than 5 minutes."
+
+  # ===============================
+  # ML Specific Alerts
+  # ===============================
+  - name: machine_learning
+    interval: 60s
+    rules:
+      # Model Training
+      - alert: ModelTrainingFailed
+        expr: increase(ml_training_jobs_total{status="error"}[10m]) > 3
+        for: 0m
+        labels:
+          severity: warning
+          component: ml_engine
+        annotations:
+          summary: "Multiple ML model training failures"
+          description: "More than 3 ML model training jobs have failed in the last 10 minutes."
+
+      - alert: ModelAccuracyDrift
+        expr: ml_model_accuracy < 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: ml_engine
+        annotations:
+          summary: "Model accuracy drift detected"
+          description: "Model {{ $labels.model_name }} accuracy has dropped below 85%: {{ $value }}."
+
+      - alert: CriticalModelAccuracyDrift
+        expr: ml_model_accuracy < 0.70
+        for: 0m
+        labels:
+          severity: critical
+          component: ml_engine
+        annotations:
+          summary: "Critical model accuracy drift"
+          description: "Model {{ $labels.model_name }} accuracy has critically dropped below 70%: {{ $value }}."
+
+      - alert: HighGPUUtilization
+        expr: nvidia_smi_utilization_gpu > 90
+        for: 30m
+        labels:
+          severity: warning
+          component: ml_engine
+        annotations:
+          summary: "High GPU utilization"
+          description: "GPU {{ $labels.gpu }} utilization has been above 90% for more than 30 minutes."
+
+      - alert: GPUMemoryHigh
+        expr: (nvidia_smi_memory_used_bytes / nvidia_smi_memory_total_bytes) * 100 > 90
+        for: 10m
+        labels:
+          severity: warning
+          component: ml_engine
+        annotations:
+          summary: "High GPU memory usage"
+          description: "GPU {{ $labels.gpu }} memory usage has been above 90% for more than 10 minutes."
+
+      - alert: ModelInferenceLatency
+        expr: histogram_quantile(0.95, rate(ml_model_inference_duration_seconds_bucket[5m])) > 10
+        for: 10m
+        labels:
+          severity: warning
+          component: ml_engine
+        annotations:
+          summary: "High model inference latency"
+          description: "95th percentile inference latency for model {{ $labels.model_name }} has been above 10 seconds for more than 10 minutes."
+
+  # ===============================
+  # Database Alerts
+  # ===============================
+  - name: database
+    interval: 30s
+    rules:
+      # PostgreSQL
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL instance {{ $labels.instance }} is down"
+          description: "PostgreSQL instance {{ $labels.instance }} has been down for more than 5 minutes."
+
+      - alert: PostgreSQLTooManyConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL too many connections"
+          description: "PostgreSQL instance {{ $labels.instance }} has too many connections ({{ $value }}%)."
+
+      - alert: PostgreSQLSlowQueries
+        expr: pg_stat_activity_max_tx_duration > 300
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "PostgreSQL slow queries"
+          description: "PostgreSQL instance {{ $labels.instance }} has queries running longer than 5 minutes."
+
+      # Redis
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Redis instance {{ $labels.instance }} is down"
+          description: "Redis instance {{ $labels.instance }} has been down for more than 5 minutes."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 90
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis instance {{ $labels.instance }} memory usage is above 90%."
+
+      - alert: RedisTooManyConnections
+        expr: redis_connected_clients > 1000
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Redis too many connections"
+          description: "Redis instance {{ $labels.instance }} has more than 1000 connected clients."
+
+      # MongoDB
+      - alert: MongoDBDown
+        expr: mongodb_up == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "MongoDB instance {{ $labels.instance }} is down"
+          description: "MongoDB instance {{ $labels.instance }} has been down for more than 5 minutes."
+
+      - alert: MongoDBReplicationLag
+        expr: mongodb_mongod_replset_member_replication_lag > 30
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "MongoDB replication lag"
+          description: "MongoDB instance {{ $labels.instance }} has replication lag of {{ $value }} seconds."
+
+  # ===============================
+  # Security Alerts
+  # ===============================
+  - name: security
+    interval: 30s
+    rules:
+      - alert: HighFailedLogins
+        expr: increase(auth_failed_logins_total[5m]) > 50
+        for: 0m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "High number of failed login attempts"
+          description: "More than 50 failed login attempts in the last 5 minutes."
+
+      - alert: SuspiciousAPIActivity
+        expr: rate(api_requests_total{status="401"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "Suspicious API activity detected"
+          description: "High rate of 401 responses detected: {{ $value }} requests/second."
+
+      - alert: RateLimitExceeded
+        expr: increase(api_rate_limits_total[5m]) > 100
+        for: 0m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "Rate limit frequently exceeded"
+          description: "Rate limit has been exceeded more than 100 times in the last 5 minutes."
+
+      - alert: CertificateExpiringSoon
+        expr: (x509_cert_expiry - time()) / 86400 < 30
+        for: 0m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "TLS certificate expiring soon"
+          description: "TLS certificate {{ $labels.subject }} will expire in {{ $value }} days."
+
+      - alert: CertificateExpired
+        expr: (x509_cert_expiry - time()) <= 0
+        for: 0m
+        labels:
+          severity: critical
+          component: security
+        annotations:
+          summary: "TLS certificate expired"
+          description: "TLS certificate {{ $labels.subject }} has expired."
+
+  # ===============================
+  # Business Logic Alerts
+  # ===============================
+  - name: business
+    interval: 60s
+    rules:
+      - alert: LowActiveUsers
+        expr: business_metric_active_users < 100
+        for: 10m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "Low number of active users"
+          description: "Active user count has been below 100 for more than 10 minutes: {{ $value }}."
+
+      - alert: HighApiCosts
+        expr: business_metric_api_cost_per_hour > 1000
+        for: 30m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "High API costs detected"
+          description: "API costs have been above $1000/hour for more than 30 minutes: ${{ $value }}."
+
+      - alert: DataProcessingBacklog
+        expr: business_metric_processing_queue_size > 10000
+        for: 15m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "Data processing backlog"
+          description: "Data processing queue size has been above 10,000 items for more than 15 minutes: {{ $value }}."
+
+      - alert: ModelPredictionVolumeAnomaly
+        expr: abs(rate(ml_model_predictions_total[1h]) - rate(ml_model_predictions_total[1h] offset 1d)) > 1000
+        for: 30m
+        labels:
+          severity: warning
+          component: business
+        annotations:
+          summary: "Anomalous model prediction volume"
+          description: "Model prediction volume differs significantly from same time yesterday: {{ $value }} predictions/hour difference."
