@@ -1,0 +1,253 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: trading-platform-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: trading_platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password_123}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: trading-platform-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_123}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API Server
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: trading-platform-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 5000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-secure_password_123}
+      DB_NAME: trading_platform
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_password_123}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-super_secure_jwt_secret_key_2024}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-super_secure_refresh_secret_key_2024}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
+      
+      # Exchange API Keys
+      BINANCE_API_KEY: ${BINANCE_API_KEY}
+      BINANCE_SECRET: ${BINANCE_SECRET}
+      COINBASE_API_KEY: ${COINBASE_API_KEY}
+      COINBASE_SECRET: ${COINBASE_SECRET}
+      COINBASE_PASSPHRASE: ${COINBASE_PASSPHRASE}
+      KRAKEN_API_KEY: ${KRAKEN_API_KEY}
+      KRAKEN_SECRET: ${KRAKEN_SECRET}
+      
+      # Email Configuration
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      
+      # Payment Processing
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      
+      # SMS Configuration
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER}
+      
+      # AI/ML Services
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      
+      # Monitoring
+      SENTRY_DSN: ${SENTRY_DSN}
+      
+    volumes:
+      - ./server/uploads:/app/uploads
+      - ./server/logs:/app/logs
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: trading-platform-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:5000/api}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:5000}
+      VITE_ENVIRONMENT: ${NODE_ENV:-production}
+      VITE_SENTRY_DSN: ${VITE_SENTRY_DSN}
+      VITE_ANALYTICS_ID: ${VITE_ANALYTICS_ID}
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - trading-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: trading-platform-nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - trading-network
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: trading-platform-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - trading-network
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: trading-platform-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin123}
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "3001:3000"
+    networks:
+      - trading-network
+
+  # AI/ML Service
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: trading-platform-ai
+    restart: unless-stopped
+    environment:
+      PYTHONPATH: /app
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-secure_password_123}@postgres:5432/trading_platform
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_password_123}@redis:6379
+    volumes:
+      - ./ai-service/models:/app/models
+      - ./ai-service/data:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - trading-network
+
+  # Background Jobs Worker
+  worker:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.worker
+    container_name: trading-platform-worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-secure_password_123}
+      DB_NAME: trading_platform
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_password_123}@redis:6379
+      
+      # Exchange API Keys
+      BINANCE_API_KEY: ${BINANCE_API_KEY}
+      BINANCE_SECRET: ${BINANCE_SECRET}
+      COINBASE_API_KEY: ${COINBASE_API_KEY}
+      COINBASE_SECRET: ${COINBASE_SECRET}
+      COINBASE_PASSPHRASE: ${COINBASE_PASSPHRASE}
+      KRAKEN_API_KEY: ${KRAKEN_API_KEY}
+      KRAKEN_SECRET: ${KRAKEN_SECRET}
+      
+    volumes:
+      - ./server/logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - trading-network
+    command: ["npm", "run", "worker"]
+
+networks:
+  trading-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
