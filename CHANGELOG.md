@@ -22,6 +22,18 @@
 - Issue templates (bug report, false positive/negative, new rule proposal) and a
   pull request template.
 - `THREAT_MODEL.md`.
+- New rule `llm-capability-override`: catches descriptions that address the calling
+  LLM directly to override its prior beliefs about its own capabilities.
+
+### Fixed
+- `net-any` missed the generic "fetches a URL from the internet" phrasing (as
+  opposed to "fetch *any* URL"). Found by scanning the real, published
+  `mcp-server-fetch` reference server, which scanned clean before this fix despite
+  doing unrestricted URL fetching.
+- That same real server's `fetch` tool description contains a genuine
+  prompt-injection payload aimed at the calling LLM ("you did not have internet
+  access... this tool now grants you internet access...") that `prompt-injection-cue`
+  didn't catch — this is what `llm-capability-override` (above) was added for.
 
 ## 0.1.0 - 2026-07-06
 

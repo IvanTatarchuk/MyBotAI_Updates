@@ -28,7 +28,7 @@
 - id: net-any
   name: Unrestricted outbound network access
   severity: medium
-  pattern: '\bfetch\s+any\s+url|\bunrestricted\s+network\b|\barbitrary\s+url\b|\bany\s+http\s+request\b|\bunrestricted\s+outbound\b'
+  pattern: '\bfetch(es|ing)?\s+(a|any)\s+url\b|\bunrestricted\s+network\b|\barbitrary\s+url\b|\bany\s+http\s+request\b|\bunrestricted\s+outbound\b|\burl\s+from\s+the\s+internet\b'
   message: "Unrestricted outbound network access"
 
 - id: secret-handling
@@ -84,3 +84,9 @@
   severity: medium
   pattern: '\binstall\s+any\s+package\b|\barbitrary\s+package\b|\bpip\s+install\b|\bnpm\s+install\b'
   message: "Tool can install arbitrary packages (supply-chain risk)"
+
+- id: llm-capability-override
+  name: Description tries to override the calling LLM's prior instructions about its own capabilities
+  severity: high
+  pattern: '\bwere\s+advised\s+to\s+refuse\b|\byou\s+(did\s+not|didn.t|do\s+not|don.t)\s+have\s+(internet|network|file|shell)\s+access\b|\bthis\s+tool\s+now\s+grants\s+you\b|\bnow\s+you\s+(can|have)\s+(internet|network)\s+access\b'
+  message: "Description addresses the calling LLM directly to override its prior beliefs about its own capabilities — a real prompt-injection pattern, not a hypothetical"
