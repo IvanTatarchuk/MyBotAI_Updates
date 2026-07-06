@@ -1,13 +1,41 @@
 # Threat model & limitations
 
-`mcp-guard` is a **static heuristic scanner**. Being honest about what that means
-matters more for a security tool than for most software, so here it is plainly.
+`mcp-guard` has two modes with very different guarantees. Being honest about what
+each one means matters more for a security tool than for most software, so here it
+is plainly.
 
-## What it actually does
+## `scan` — static heuristic analysis
 
 It reads a tool's `name`, `description`, and `inputSchema` — text — and pattern-matches
 that text against a rule list. It never executes the tool, never inspects the server's
 actual source code or runtime behavior, and never proves anything.
+
+## `probe` — live execution, network-isolated only
+
+`probe` actually launches the server and calls every tool once with synthesized
+arguments, inside a sandbox built on Linux network namespaces (`unshare --net`).
+Be precise about what that sandbox does and doesn't cover:
+
+- **Isolated: outbound network access.** The probed process gets an empty network
+  namespace — no route to anything, including localhost services outside its own
+  namespace. This is real and verified (`tests/test_sandbox_integration.py` proves
+  it against a tool that makes a genuine connection attempt), not a claim.
+- **NOT isolated: the filesystem.** A probed tool can read and write real files with
+  the same permissions this process has. If you probe a server you don't trust, and
+  one of its tools deletes files or writes somewhere unexpected, `probe` will not
+  stop it — it will happen for real. This is the single biggest caveat: don't run
+  `probe` against a server you're not willing to have full filesystem access to your
+  machine.
+- **NOT isolated: PID namespace is separate but not a security boundary** — it
+  prevents the probed process from seeing/signaling unrelated host processes, but
+  offers no protection against filesystem or resource abuse.
+- **Arguments are synthesized, not adversarial.** Placeholder values (empty-ish
+  strings, zeros, `false`) are enough to exercise a tool's real code path, but
+  `probe` makes no attempt at fuzzing, injection payloads, or adversarial inputs —
+  it's checking "does this tool's actual behavior match a benign call," not
+  penetration-testing the server.
+- **One call per tool, no state.** Multi-step exploits, or behavior that only
+  triggers on the second call or a specific argument combination, won't be observed.
 
 ## What this catches
 
@@ -46,10 +74,8 @@ actually reading the code of anything you give real permissions to.
 
 ## Roadmap toward reducing these gaps
 
-The biggest structural gap (static description vs. actual behavior) is why "live
-sandboxed execution probing" is the top roadmap item in the README: actually invoking
-each tool with representative inputs inside an isolated sandbox and observing what it
-does (syscalls, network destinations, filesystem access) would catch the
-description-doesn't-match-behavior case. That's a meaningfully larger undertaking
-(needs a real sandbox — containers/gVisor/seccomp — plus a way to synthesize safe
-probe inputs from a tool's schema) and hasn't been built yet.
+The remaining structural gap is filesystem isolation for `probe` — tracked in the
+README roadmap as a bubblewrap/Docker backend that would confine writes to a
+scratch directory and make the real filesystem read-only. Until that lands, treat
+`probe` as: safe from network exfiltration, but not safe from a malicious or buggy
+tool that damages the local filesystem.

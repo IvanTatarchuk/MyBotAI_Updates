@@ -123,5 +123,58 @@ def list_rules(extra_rules: tuple[Path, ...], config_path: Path | None) -> None:
     print_rules_table(rules, ignored_ids)
 
 
+@main.command()
+@click.option(
+    "--stdio",
+    "stdio_command",
+    metavar="COMMAND",
+    required=True,
+    help='Command that launches the MCP server, e.g. --stdio "python server.py"',
+)
+@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table")
+@click.option(
+    "--yes",
+    "confirmed",
+    is_flag=True,
+    help="Required: confirms you understand this actually runs the server and calls its tools for real.",
+)
+def probe(stdio_command: str, output_format: str, confirmed: bool) -> None:
+    """Actually call every tool once with synthesized arguments, inside a network-isolated sandbox.
+
+    EXPERIMENTAL. Unlike `scan`, this executes the server's real code — it launches
+    the server and calls each tool with placeholder arguments derived from its input
+    schema, to see what happens instead of only reading what its description claims.
+
+    The sandbox blocks outbound network access (Linux network namespaces via
+    `unshare --net`). It does NOT isolate the filesystem: a probed tool can still
+    read and write real files. Read THREAT_MODEL.md before relying on this.
+    """
+    import shlex
+
+    from mcp_guard.probe import probe_tools_stdio
+    from mcp_guard.report import print_probe_table, to_probe_json
+    from mcp_guard.sandbox import SandboxUnavailable, build_sandboxed_command, describe_sandbox
+
+    if not confirmed:
+        raise click.ClickException(
+            "`probe` actually runs the target server and calls its tools for real "
+            "(only network access is sandboxed, not the filesystem — see THREAT_MODEL.md). "
+            "Re-run with --yes once you understand this."
+        )
+
+    try:
+        sandboxed_command = build_sandboxed_command(shlex.split(stdio_command))
+    except SandboxUnavailable as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Sandbox: {describe_sandbox()}", err=True)
+    results = asyncio.run(probe_tools_stdio(sandboxed_command))
+
+    if output_format == "json":
+        click.echo(to_probe_json(results))
+    else:
+        print_probe_table(results)
+
+
 if __name__ == "__main__":
     main()

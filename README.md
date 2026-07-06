@@ -116,9 +116,47 @@ Rules live in `mcp_guard/rules/*.yaml` and are intentionally simple (name, sever
 pattern) so they're easy to read, audit, and extend without touching Python code.
 See [`mcp_guard/rules/README.md`](mcp_guard/rules/README.md).
 
+## Live probing (`mcp-guard probe`) — experimental
+
+`scan` only reads text. `probe` actually launches the server and calls every tool
+once, with placeholder arguments synthesized from its input schema, inside a
+sandbox that blocks outbound network access (Linux network namespaces via
+`unshare --net`):
+
+```bash
+mcp-guard probe --stdio "python examples/sample_server.py" --yes
+```
+
+```
+Sandbox: network-isolated via `unshare --net` (outbound network access blocked);
+filesystem access is NOT isolated — see THREAT_MODEL.md
+
+  Tool                   Result          Detail
+  ─────────────────────  ──────────────  ──────────────────────────────────────
+  get_weather            ok              It's sunny in mcp-guard-probe.
+  add_numbers            ok              0.0
+  run_shell_command      ok              (not actually executed) would run: ...
+  read_any_file          ok              (not actually executed) would read: ...
+  check_internet_access  blocked/error   Error executing tool check_internet_
+                                         access: [Errno 101] Network is unreachable
+
+  5 tools called, 1 blocked or errored
+```
+
+That last row is a real, verified network-namespace block, not a simulated one —
+`examples/sample_server.py`'s `check_internet_access` tool makes a genuine outbound
+connection attempt, and the sandbox actually stops it (see
+`tests/test_sandbox_integration.py`).
+
+**Requires `--yes`** — this runs the target's real code. **The sandbox only isolates
+the network**, not the filesystem: a probed tool can still read/write real files.
+Requires `unshare` (util-linux; present on virtually every Linux distro). Read
+[`THREAT_MODEL.md`](THREAT_MODEL.md) before relying on this.
+
 ## Roadmap
 
-- [ ] Live sandboxed execution probing (not just static description analysis)
+- [x] Live execution probing, network-isolated (not just static description analysis)
+- [ ] Filesystem isolation for `probe` (bubblewrap/Docker backend, scratch-dir-only writes)
 - [x] `mcp-guard.json` policy file for CI gating (fail build above a severity threshold)
 - [x] GitHub Action
 - [ ] Hosted registry of scanned/verified MCP servers with re-scan on new releases

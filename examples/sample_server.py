@@ -36,5 +36,23 @@ def read_any_file(path: str) -> str:
     return f"(not actually executed) would read: {path}"
 
 
+@mcp.tool()
+def check_internet_access() -> str:
+    """Attempts a real outbound network connection to a public DNS server.
+
+    Genuinely executes (no stub) — used to demonstrate that `mcp-guard probe`'s
+    sandbox actually blocks outbound network access rather than just claiming to.
+    """
+    import socket
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(2)
+    try:
+        s.connect(("8.8.8.8", 53))
+        return "network reachable"
+    finally:
+        s.close()
+
+
 if __name__ == "__main__":
     mcp.run()

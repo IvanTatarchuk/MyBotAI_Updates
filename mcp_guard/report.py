@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from mcp_guard.models import Finding, Severity
 
 if TYPE_CHECKING:
+    from mcp_guard.probe import ProbeResult
     from mcp_guard.rules_engine import Rule
 
 _SEVERITY_STYLE = {
@@ -83,3 +84,43 @@ def print_rules_table(rules: list[Rule], ignored_ids: set[str] | None = None) ->
 
     console.print(table)
     console.print(f"\n{len(rules)} rules loaded" + (f", {len(ignored_ids)} ignored by policy" if ignored_ids else ""))
+
+
+def to_probe_json(results: list[ProbeResult]) -> str:
+    return json.dumps(
+        [
+            {
+                "tool": r.tool_name,
+                "arguments": r.arguments,
+                "ok": r.ok,
+                "detail": r.detail,
+            }
+            for r in results
+        ],
+        indent=2,
+    )
+
+
+def print_probe_table(results: list[ProbeResult]) -> None:
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+
+    if not results:
+        console.print("[yellow]Server advertised no tools — nothing to probe.[/yellow]")
+        return
+
+    table = Table(show_edge=False)
+    table.add_column("Tool")
+    table.add_column("Result")
+    table.add_column("Detail")
+
+    for r in results:
+        result_display = "[green]ok[/green]" if r.ok else "[bold red]blocked/error[/bold red]"
+        table.add_row(r.tool_name, result_display, r.detail or "")
+
+    console.print(table)
+
+    blocked = sum(1 for r in results if not r.ok)
+    console.print(f"\n{len(results)} tools called, {blocked} blocked or errored")
