@@ -19,7 +19,7 @@ class Rule:
     message: str
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Rule":
+    def from_dict(cls, data: dict) -> Rule:
         return cls(
             id=data["id"],
             name=data["name"],

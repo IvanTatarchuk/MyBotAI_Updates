@@ -20,12 +20,39 @@ def main() -> None:
 
 
 @main.command()
-@click.option("--stdio", "stdio_command", metavar="COMMAND", help='Launch and scan a live server, e.g. --stdio "python server.py"')
-@click.option("--manifest", "manifest_path", type=click.Path(exists=True, path_type=Path), help="Scan a static tools/list JSON manifest instead of a live server")
+@click.option(
+    "--stdio",
+    "stdio_command",
+    metavar="COMMAND",
+    help='Launch and scan a live server, e.g. --stdio "python server.py"',
+)
+@click.option(
+    "--manifest",
+    "manifest_path",
+    type=click.Path(exists=True, path_type=Path),
+    help="Scan a static tools/list JSON manifest instead of a live server",
+)
 @click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table")
-@click.option("--rules", "extra_rules", type=click.Path(exists=True, path_type=Path), multiple=True, help="Additional rule YAML file(s), on top of the built-in rule set")
-@click.option("--fail-on", type=click.Choice(["low", "medium", "high"]), default=None, help="Exit non-zero if any finding is at or above this severity (for CI). Overrides mcp-guard.json.")
-@click.option("--config", "config_path", type=click.Path(exists=True, path_type=Path), default=None, help="Policy file (default: ./mcp-guard.json if present)")
+@click.option(
+    "--rules",
+    "extra_rules",
+    type=click.Path(exists=True, path_type=Path),
+    multiple=True,
+    help="Additional rule YAML file(s), on top of the built-in rule set",
+)
+@click.option(
+    "--fail-on",
+    type=click.Choice(["low", "medium", "high"]),
+    default=None,
+    help="Exit non-zero if any finding is at or above this severity (for CI). Overrides mcp-guard.json.",
+)
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Policy file (default: ./mcp-guard.json if present)",
+)
 def scan(
     stdio_command: str | None,
     manifest_path: Path | None,
@@ -43,6 +70,7 @@ def scan(
     if manifest_path:
         tools = load_manifest(manifest_path)
     else:
+        assert stdio_command is not None  # guaranteed by the exactly-one-of check above
         from mcp_guard.client import list_tools_stdio
 
         tools = asyncio.run(list_tools_stdio(stdio_command))
@@ -66,6 +94,33 @@ def scan(
         worst = highest_severity(findings)
         if worst is not None and worst >= threshold:
             sys.exit(1)
+
+
+@main.command(name="rules")
+@click.option(
+    "--rules",
+    "extra_rules",
+    type=click.Path(exists=True, path_type=Path),
+    multiple=True,
+    help="Additional rule YAML file(s), on top of the built-in rule set",
+)
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Policy file (default: ./mcp-guard.json if present) — resolves extra rules and ignored ids",
+)
+def list_rules(extra_rules: tuple[Path, ...], config_path: Path | None) -> None:
+    """List every detection rule that would be applied by `scan`."""
+    from mcp_guard.report import print_rules_table
+
+    config = load_config(config_path)
+    rule_paths = list(extra_rules) + list(config.get("rules", []))
+    rules = load_rules(extra_paths=rule_paths)
+    ignored_ids = set(config.get("ignore", []))
+
+    print_rules_table(rules, ignored_ids)
 
 
 if __name__ == "__main__":

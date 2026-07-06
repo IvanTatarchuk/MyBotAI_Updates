@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 from mcp_guard.models import Finding, Severity
+
+if TYPE_CHECKING:
+    from mcp_guard.rules_engine import Rule
 
 _SEVERITY_STYLE = {
     Severity.HIGH: "bold red",
@@ -57,3 +61,25 @@ def print_table(findings: list[Finding]) -> None:
 
 def highest_severity(findings: list[Finding]) -> Severity | None:
     return max((f.severity for f in findings), default=None)
+
+
+def print_rules_table(rules: list[Rule], ignored_ids: set[str] | None = None) -> None:
+    from rich.console import Console
+    from rich.table import Table
+
+    console = Console()
+    ignored_ids = ignored_ids or set()
+
+    table = Table(show_edge=False)
+    table.add_column("Id")
+    table.add_column("Severity")
+    table.add_column("Name")
+    table.add_column("Message")
+
+    for rule in sorted(rules, key=lambda r: r.severity, reverse=True):
+        style = _SEVERITY_STYLE[rule.severity]
+        id_display = f"[strike]{rule.id}[/strike] (ignored)" if rule.id in ignored_ids else rule.id
+        table.add_row(id_display, f"[{style}]{rule.severity}[/{style}]", rule.name, rule.message)
+
+    console.print(table)
+    console.print(f"\n{len(rules)} rules loaded" + (f", {len(ignored_ids)} ignored by policy" if ignored_ids else ""))

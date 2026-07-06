@@ -26,6 +26,9 @@ definitions.
 
 Early / v0.1. Rule-based static scanner. Contributions and new rules welcome.
 
+**Read [`THREAT_MODEL.md`](THREAT_MODEL.md) before relying on this** — it's a static
+heuristic over tool descriptions, not a guarantee about actual server behavior.
+
 ## Install
 
 ```bash
@@ -66,6 +69,12 @@ $ mcp-guard scan --manifest examples/risky_tools.json
                                   (rule: prompt-injection-cue)
 
   4 findings across 4 tools (2 high, 1 medium, 1 low)
+```
+
+List every rule that would be applied (useful for auditing what's actually covered):
+
+```bash
+mcp-guard rules
 ```
 
 ## Policy file (`mcp-guard.json`)

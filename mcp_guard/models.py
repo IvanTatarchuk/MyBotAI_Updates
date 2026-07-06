@@ -11,7 +11,7 @@ class Severity(IntEnum):
     HIGH = 3
 
     @classmethod
-    def from_str(cls, value: str) -> "Severity":
+    def from_str(cls, value: str) -> Severity:
         return cls[value.strip().upper()]
 
     def __str__(self) -> str:
