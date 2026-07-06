@@ -48,3 +48,39 @@
   severity: high
   pattern: '\beval\(|\bexec\(|\bnew Function\(|\bpickle\.loads\b'
   message: "Free-form input appears to feed an eval/exec-style sink"
+
+- id: sql-unrestricted
+  name: Unrestricted SQL execution
+  severity: high
+  pattern: '\barbitrary\s+sql\b|\bruns?\s+any\s+(sql\s+)?quer(y|ies)\b|\bexecutes?\s+any\s+(sql\s+)?quer(y|ies)\b|\bdrop\s+table\b'
+  message: "Unrestricted/arbitrary SQL execution"
+
+- id: process-spawn
+  name: Unrestricted process spawning
+  severity: high
+  pattern: '\bspawns?\s+(any|arbitrary)\s+process\b|\bexecutes?\s+(any|arbitrary)\s+binary\b|\bruns?\s+any\s+executable\b'
+  message: "Unrestricted process spawning"
+
+- id: ssrf-risk
+  name: Possible server-side request forgery surface
+  severity: high
+  pattern: '\b169\.254\.169\.254\b|\bmetadata\s+endpoint\b|\binternal\s+network\s+access\b|\bssrf\b'
+  message: "Tool description suggests it can reach internal/metadata network endpoints"
+
+- id: cloud-admin-access
+  name: Broad cloud/IAM admin access
+  severity: high
+  pattern: '\bfull\s+admin\s+access\b|\bassume\s+any\s+role\b|\biam:\*|\bfull\s+aws\s+access\b'
+  message: "Tool claims broad cloud/IAM admin access"
+
+- id: credential-persistence
+  name: Persistent access/credential modification
+  severity: high
+  pattern: '\badd\s+(an?\s+)?ssh\s+key\b|\bcreate\s+(a\s+)?user\s+account\b|\bmodify\s+(the\s+)?crontab\b|\badd\s+to\s+crontab\b'
+  message: "Tool can create persistent access (SSH keys, user accounts, cron jobs)"
+
+- id: package-install-arbitrary
+  name: Arbitrary package installation
+  severity: medium
+  pattern: '\binstall\s+any\s+package\b|\barbitrary\s+package\b|\bpip\s+install\b|\bnpm\s+install\b'
+  message: "Tool can install arbitrary packages (supply-chain risk)"

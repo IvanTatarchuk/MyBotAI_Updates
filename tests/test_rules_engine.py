@@ -52,3 +52,57 @@ def test_secret_handling_rule_does_not_fire_when_redaction_mentioned():
     findings = scan_tool(tool, rules)
 
     assert not any(f.rule_id == "secret-handling" for f in findings)
+
+
+def test_sql_unrestricted_rule_fires_and_spares_scoped_queries():
+    rules = load_rules()
+    risky = ToolDef(name="run_query", description="Runs any sql query against the production database.")
+    safe = ToolDef(name="get_user_count", description="Returns the number of rows in the users table.")
+
+    assert any(f.rule_id == "sql-unrestricted" for f in scan_tool(risky, rules))
+    assert not any(f.rule_id == "sql-unrestricted" for f in scan_tool(safe, rules))
+
+
+def test_process_spawn_rule_fires_and_spares_fixed_commands():
+    rules = load_rules()
+    risky = ToolDef(name="run_binary", description="Executes any binary on the host with the given arguments.")
+    safe = ToolDef(name="check_disk_space", description="Runs `df -h` and returns the parsed output.")
+
+    assert any(f.rule_id == "process-spawn" for f in scan_tool(risky, rules))
+    assert not any(f.rule_id == "process-spawn" for f in scan_tool(safe, rules))
+
+
+def test_ssrf_risk_rule_fires_on_metadata_endpoint_mention():
+    rules = load_rules()
+    tool = ToolDef(name="fetch", description="Fetches a URL, including the cloud metadata endpoint if requested.")
+
+    assert any(f.rule_id == "ssrf-risk" for f in scan_tool(tool, rules))
+
+
+def test_cloud_admin_access_rule_fires_and_spares_read_only():
+    rules = load_rules()
+    risky = ToolDef(name="cloud_ops", description="Grants full admin access to the connected AWS account.")
+    safe = ToolDef(name="list_buckets", description="Lists S3 bucket names the caller can read.")
+
+    assert any(f.rule_id == "cloud-admin-access" for f in scan_tool(risky, rules))
+    assert not any(f.rule_id == "cloud-admin-access" for f in scan_tool(safe, rules))
+
+
+def test_credential_persistence_rule_fires_on_ssh_key_and_cron():
+    rules = load_rules()
+    ssh = ToolDef(name="grant_access", description="Can add an ssh key to the target user's authorized_keys.")
+    cron = ToolDef(name="schedule", description="Can modify the crontab to run a command periodically.")
+    safe = ToolDef(name="list_users", description="Lists usernames on the system.")
+
+    assert any(f.rule_id == "credential-persistence" for f in scan_tool(ssh, rules))
+    assert any(f.rule_id == "credential-persistence" for f in scan_tool(cron, rules))
+    assert not any(f.rule_id == "credential-persistence" for f in scan_tool(safe, rules))
+
+
+def test_package_install_arbitrary_rule_fires_and_spares_pinned_installs():
+    rules = load_rules()
+    risky = ToolDef(name="install", description="Runs pip install for any package name given by the caller.")
+    safe = ToolDef(name="check_version", description="Reports the currently installed version of numpy.")
+
+    assert any(f.rule_id == "package-install-arbitrary" for f in scan_tool(risky, rules))
+    assert not any(f.rule_id == "package-install-arbitrary" for f in scan_tool(safe, rules))

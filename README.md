@@ -46,6 +46,12 @@ Scan a static list of tool definitions exported as JSON (e.g. from `tools/list`)
 mcp-guard scan --manifest tools.json
 ```
 
+Try it against the bundled sample server (mixes safe and deliberately risky tools):
+
+```bash
+mcp-guard scan --stdio "python examples/sample_server.py"
+```
+
 Example output:
 
 ```
