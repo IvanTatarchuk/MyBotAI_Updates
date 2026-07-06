@@ -1,5 +1,8 @@
 # mcp-guard
 
+[![CI](https://github.com/IvanTatarchuk/MyBotAI_Updates/actions/workflows/ci.yml/badge.svg)](https://github.com/IvanTatarchuk/MyBotAI_Updates/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Open-source security scanner for [MCP](https://modelcontextprotocol.io) servers.
 
 Before you let an AI agent talk to a random MCP server, `mcp-guard` connects to it,
@@ -59,6 +62,39 @@ $ mcp-guard scan --manifest examples/risky_tools.json
   4 findings across 4 tools (2 high, 1 medium, 1 low)
 ```
 
+## Policy file (`mcp-guard.json`)
+
+Drop an `mcp-guard.json` in your repo root to set defaults without repeating flags.
+CLI flags always win over the file.
+
+```json
+{
+  "fail_on": "high",
+  "ignore": ["prompt-injection-cue"],
+  "rules": ["custom_rules.yaml"]
+}
+```
+
+- `fail_on` — same as `--fail-on`.
+- `ignore` — rule ids to drop from the results entirely (e.g. a rule that's too
+  noisy for your servers).
+- `rules` — extra rule YAML files, paths relative to the config file.
+
+See [`examples/mcp-guard.example.json`](examples/mcp-guard.example.json).
+
+## GitHub Action
+
+Gate CI on a scan of your own MCP server:
+
+```yaml
+- uses: IvanTatarchuk/MyBotAI_Updates@main
+  with:
+    manifest: tools.json     # or: stdio-command: "python server.py"
+    fail-on: high
+```
+
+See [`action.yml`](action.yml) for all inputs.
+
 ## Rules
 
 Rules live in `mcp_guard/rules/*.yaml` and are intentionally simple (name, severity,
@@ -68,8 +104,8 @@ See [`mcp_guard/rules/README.md`](mcp_guard/rules/README.md).
 ## Roadmap
 
 - [ ] Live sandboxed execution probing (not just static description analysis)
-- [ ] `mcp-guard.json` policy file for CI gating (fail build above a severity threshold)
-- [ ] GitHub Action
+- [x] `mcp-guard.json` policy file for CI gating (fail build above a severity threshold)
+- [x] GitHub Action
 - [ ] Hosted registry of scanned/verified MCP servers with re-scan on new releases
 
 ## License

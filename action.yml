@@ -1,0 +1,56 @@
+name: "mcp-guard scan"
+description: "Scan an MCP server for risky tool definitions (shell exec, unbounded filesystem/network access, prompt-injection cues, secret handling) and fail the build above a severity threshold."
+branding:
+  icon: "shield"
+  color: "red"
+
+inputs:
+  manifest:
+    description: "Path to a static tools/list JSON manifest to scan. Mutually exclusive with stdio-command."
+    required: false
+  stdio-command:
+    description: 'Shell command to launch a live MCP server over stdio, e.g. "python server.py". Mutually exclusive with manifest.'
+    required: false
+  fail-on:
+    description: "Exit non-zero if any finding is at or above this severity (low|medium|high)."
+    required: false
+    default: "high"
+  config:
+    description: "Path to an mcp-guard.json policy file."
+    required: false
+  format:
+    description: "Output format: table or json."
+    required: false
+    default: "table"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install mcp-guard
+      shell: bash
+      run: pip install -e "${{ github.action_path }}"
+
+    - name: Run mcp-guard scan
+      shell: bash
+      run: |
+        set -euo pipefail
+        args=(--format "${{ inputs.format }}" --fail-on "${{ inputs.fail-on }}")
+
+        if [ -n "${{ inputs.manifest }}" ]; then
+          args+=(--manifest "${{ inputs.manifest }}")
+        elif [ -n "${{ inputs.stdio-command }}" ]; then
+          args+=(--stdio "${{ inputs.stdio-command }}")
+        else
+          echo "::error::one of 'manifest' or 'stdio-command' input is required" >&2
+          exit 1
+        fi
+
+        if [ -n "${{ inputs.config }}" ]; then
+          args+=(--config "${{ inputs.config }}")
+        fi
+
+        mcp-guard scan "${args[@]}"
