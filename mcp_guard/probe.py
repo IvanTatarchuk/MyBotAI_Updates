@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
+
+from mcp_guard.client import DEFAULT_TIMEOUT_SECONDS, StdioTimeout, _is_or_contains_timeout, _timeout_message
 
 
 @dataclass
@@ -50,7 +53,7 @@ def _placeholder_for(schema: dict[str, Any]) -> Any:
     return "mcp-guard-probe"
 
 
-async def probe_tools_stdio(command: list[str]) -> list[ProbeResult]:
+async def probe_tools_stdio(command: list[str], timeout: float = DEFAULT_TIMEOUT_SECONDS) -> list[ProbeResult]:
     """Launch `command` (already sandbox-wrapped) as an MCP server over stdio,
     then call every tool it advertises once, with synthesized arguments.
     """
@@ -60,22 +63,29 @@ async def probe_tools_stdio(command: list[str]) -> list[ProbeResult]:
     server_params = StdioServerParameters(command=command[0], args=command[1:])
 
     results: list[ProbeResult] = []
-    async with stdio_client(server_params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            listing = await session.list_tools()
+    try:
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await asyncio.wait_for(session.initialize(), timeout=timeout)
+                listing = await asyncio.wait_for(session.list_tools(), timeout=timeout)
 
-            for tool in listing.tools:
-                arguments = synthesize_args(tool.inputSchema or {})
-                results.append(await _call_one(session, tool.name, arguments))
+                for tool in listing.tools:
+                    arguments = synthesize_args(tool.inputSchema or {})
+                    results.append(await _call_one(session, tool.name, arguments, timeout))
+    except Exception as exc:
+        if _is_or_contains_timeout(exc):
+            raise StdioTimeout(_timeout_message(timeout)) from exc
+        raise
 
     return results
 
 
-async def _call_one(session: Any, tool_name: str, arguments: dict[str, Any]) -> ProbeResult:
+async def _call_one(session: Any, tool_name: str, arguments: dict[str, Any], timeout: float) -> ProbeResult:
     try:
-        result = await session.call_tool(tool_name, arguments)
+        result = await asyncio.wait_for(session.call_tool(tool_name, arguments), timeout=timeout)
     except Exception as exc:  # noqa: BLE001 - transport/tool errors are exactly what we report
+        if _is_or_contains_timeout(exc):
+            return ProbeResult(tool_name, arguments, ok=False, detail=f"timed out after {timeout}s")
         return ProbeResult(tool_name, arguments, ok=False, detail=str(exc))
 
     detail = _extract_text(result.content) or ("ok" if not result.isError else "tool returned an error")

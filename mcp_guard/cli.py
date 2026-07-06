@@ -53,6 +53,14 @@ def main() -> None:
     default=None,
     help="Policy file (default: ./mcp-guard.json if present)",
 )
+@click.option(
+    "--timeout",
+    type=float,
+    default=None,
+    help="Seconds to wait for the server to respond before giving up (default: 30). "
+    "If the command uses `npx`, a hang usually means resolving it to the actual "
+    "interpreter/entry point instead would fix it.",
+)
 def scan(
     stdio_command: str | None,
     manifest_path: Path | None,
@@ -60,6 +68,7 @@ def scan(
     extra_rules: tuple[Path, ...],
     fail_on: str | None,
     config_path: Path | None,
+    timeout: float | None,
 ) -> None:
     """Scan an MCP server's tools for risky patterns."""
     if bool(stdio_command) == bool(manifest_path):
@@ -71,9 +80,12 @@ def scan(
         tools = load_manifest(manifest_path)
     else:
         assert stdio_command is not None  # guaranteed by the exactly-one-of check above
-        from mcp_guard.client import list_tools_stdio
+        from mcp_guard.client import DEFAULT_TIMEOUT_SECONDS, StdioTimeout, list_tools_stdio
 
-        tools = asyncio.run(list_tools_stdio(stdio_command))
+        try:
+            tools = asyncio.run(list_tools_stdio(stdio_command, timeout=timeout or DEFAULT_TIMEOUT_SECONDS))
+        except StdioTimeout as exc:
+            raise click.ClickException(str(exc)) from exc
 
     rule_paths = list(extra_rules) + list(config.get("rules", []))
     rules = load_rules(extra_paths=rule_paths)
@@ -138,19 +150,28 @@ def list_rules(extra_rules: tuple[Path, ...], config_path: Path | None) -> None:
     is_flag=True,
     help="Required: confirms you understand this actually runs the server and calls its tools for real.",
 )
-def probe(stdio_command: str, output_format: str, confirmed: bool) -> None:
-    """Actually call every tool once with synthesized arguments, inside a network-isolated sandbox.
+@click.option(
+    "--timeout",
+    type=float,
+    default=None,
+    help="Seconds to wait for the server/each tool call to respond before giving up (default: 30).",
+)
+def probe(stdio_command: str, output_format: str, confirmed: bool, timeout: float | None) -> None:
+    """Actually call every tool once with synthesized arguments, inside a sandbox.
 
     EXPERIMENTAL. Unlike `scan`, this executes the server's real code — it launches
     the server and calls each tool with placeholder arguments derived from its input
     schema, to see what happens instead of only reading what its description claims.
 
-    The sandbox blocks outbound network access (Linux network namespaces via
-    `unshare --net`). It does NOT isolate the filesystem: a probed tool can still
-    read and write real files. Read THREAT_MODEL.md before relying on this.
+    The sandbox blocks outbound network access and filesystem writes outside a
+    throwaway scratch directory (Linux namespaces via `unshare`). It does NOT
+    prevent the tool from reading real files, and the read-only remount doesn't
+    cover separately-mounted filesystems. Read THREAT_MODEL.md before relying on
+    this.
     """
     import shlex
 
+    from mcp_guard.client import DEFAULT_TIMEOUT_SECONDS, StdioTimeout
     from mcp_guard.probe import probe_tools_stdio
     from mcp_guard.report import print_probe_table, to_probe_json
     from mcp_guard.sandbox import SandboxUnavailable, build_sandboxed_command, describe_sandbox
@@ -158,7 +179,8 @@ def probe(stdio_command: str, output_format: str, confirmed: bool) -> None:
     if not confirmed:
         raise click.ClickException(
             "`probe` actually runs the target server and calls its tools for real "
-            "(only network access is sandboxed, not the filesystem — see THREAT_MODEL.md). "
+            "(filesystem reads are not sandboxed, and the read-only remount doesn't cover "
+            "separately-mounted filesystems — see THREAT_MODEL.md). "
             "Re-run with --yes once you understand this."
         )
 
@@ -168,7 +190,10 @@ def probe(stdio_command: str, output_format: str, confirmed: bool) -> None:
         raise click.ClickException(str(exc)) from exc
 
     click.echo(f"Sandbox: {describe_sandbox()}", err=True)
-    results = asyncio.run(probe_tools_stdio(sandboxed_command))
+    try:
+        results = asyncio.run(probe_tools_stdio(sandboxed_command, timeout=timeout or DEFAULT_TIMEOUT_SECONDS))
+    except StdioTimeout as exc:
+        raise click.ClickException(str(exc)) from exc
 
     if output_format == "json":
         click.echo(to_probe_json(results))

@@ -85,6 +85,16 @@ or (absence of findings) "this is safe." `mcp-guard` is meant to move a large pi
 unaudited MCP servers into a smaller, prioritized pile — it is not a substitute for
 actually reading the code of anything you give real permissions to.
 
+## Operational note: `npx`-launched servers
+
+Both `scan --stdio` and `probe --stdio` have a `--timeout` (default 30s) precisely
+because launching a server via `npx -y <package>` — a common pattern in MCP server
+documentation — can hang the initialize handshake indefinitely rather than
+erroring, for reasons specific to how npx manages its child process. This isn't a
+security property, just an interop rough edge: if you hit it, resolve the command
+to the actual interpreter and entry point (e.g. `node .../dist/index.js ...`)
+instead of going through `npx`.
+
 ## Roadmap toward reducing these gaps
 
 The remaining gaps for `probe` are: recursive read-only coverage of separately

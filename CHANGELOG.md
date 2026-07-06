@@ -34,6 +34,12 @@
   prompt-injection payload aimed at the calling LLM ("you did not have internet
   access... this tool now grants you internet access...") that `prompt-injection-cue`
   didn't catch — this is what `llm-capability-override` (above) was added for.
+- `scan`/`probe` had no timeout: a server launched via `npx` (extremely common in
+  MCP server docs) could hang forever instead of erroring, because npx can
+  delay/swallow the initialize handshake. Added a `--timeout` option (default 30s)
+  to both commands, plus a `StdioTimeout` error that unwraps the ExceptionGroup
+  anyio/MCP wraps a plain `TimeoutError` in, so the failure is a clear one-line
+  message instead of a raw traceback.
 
 ## 0.1.0 - 2026-07-06
 
