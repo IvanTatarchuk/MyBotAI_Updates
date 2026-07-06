@@ -1,0 +1,50 @@
+# Default rule set for mcp-guard.
+#
+# Each rule:
+#   id:        stable identifier, referenced in findings and CI policy files
+#   name:      short human-readable label
+#   severity:  low | medium | high
+#   pattern:   case-insensitive regex, matched against "name + description + input_schema JSON"
+#   message:   shown to the user when the rule fires
+
+- id: shell-exec
+  name: Unrestricted shell execution
+  severity: high
+  pattern: '\barbitrary\s+(shell|command)|\bshell\s+(command|execution)\b|\bsubprocess\b|\bos\.system\b|\bexec\('
+  message: "Unrestricted shell execution"
+
+- id: fs-read-any
+  name: Unbounded filesystem read
+  severity: high
+  pattern: '\bread(s|ing)?\s+(any|arbitrary|all)\s+file|\bfull\s+filesystem\s+access\b|\bread/write\s+any\b'
+  message: "Unbounded filesystem read"
+
+- id: fs-write-any
+  name: Unbounded filesystem write
+  severity: high
+  pattern: '\bwrite\s+(any|arbitrary)\s+file|\bdelete\s+(any|arbitrary)\s+file\b'
+  message: "Unbounded filesystem write"
+
+- id: net-any
+  name: Unrestricted outbound network access
+  severity: medium
+  pattern: '\bfetch\s+any\s+url|\bunrestricted\s+network\b|\barbitrary\s+url\b|\bany\s+http\s+request\b|\bunrestricted\s+outbound\b'
+  message: "Unrestricted outbound network access"
+
+- id: secret-handling
+  name: Possible unredacted secret handling
+  severity: medium
+  pattern: '\b(api[_ ]?key|access[_ ]?token|password|secret)\b(?!.*(redact|mask|hash))'
+  message: "Tool appears to handle credentials/secrets without indication of redaction"
+
+- id: prompt-injection-cue
+  name: Instruction-like phrasing in description
+  severity: low
+  pattern: '\bignore (all )?previous instructions\b|\balways respond with\b|\bdisregard (the )?(prior|previous)\b|\byou must always\b|\bsystem prompt\b'
+  message: "Description contains instruction-like phrasing"
+
+- id: eval-sink
+  name: Free-form input feeding an execution sink
+  severity: high
+  pattern: '\beval\(|\bexec\(|\bnew Function\(|\bpickle\.loads\b'
+  message: "Free-form input appears to feed an eval/exec-style sink"

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-guard"
+version = "0.1.0"
+description = "Security scanner for MCP servers — flags overbroad permissions, prompt-injection cues, and unsafe tool definitions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Ivan Tatarchuk" }]
+dependencies = [
+    "mcp>=1.0.0",
+    "click>=8.1",
+    "rich>=13.7",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+mcp-guard = "mcp_guard.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["mcp_guard*"]
+
+[tool.setuptools.package-data]
+mcp_guard = ["rules/*.yaml"]
