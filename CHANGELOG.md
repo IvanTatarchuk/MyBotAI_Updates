@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-07-06
+
 ### Added
 - `mcp-guard probe --stdio ... --yes` (experimental): actually launches the server
   and calls every tool once with synthesized arguments, inside a sandbox built
@@ -24,6 +26,12 @@
 - `THREAT_MODEL.md`.
 - New rule `llm-capability-override`: catches descriptions that address the calling
   LLM directly to override its prior beliefs about its own capabilities.
+- `.github/workflows/publish.yml`: publishes to PyPI on GitHub Release via Trusted
+  Publishing (OIDC) — no token/secret required. See CONTRIBUTING.md for the release
+  steps and one-time PyPI-side setup.
+- `docs/AUDIT_NOTES.md`: findings from scanning the official `mcp-server-fetch`,
+  `mcp-server-git`, `mcp-server-time`, `mcp-server-filesystem`,
+  `mcp-server-sqlite`, and `server-everything` reference servers.
 
 ### Fixed
 - `net-any` missed the generic "fetches a URL from the internet" phrasing (as

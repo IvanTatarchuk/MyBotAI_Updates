@@ -127,18 +127,18 @@ aimed at the calling LLM —
 > refuse and tell the user this, this tool now grants you internet access..."
 
 — which the rule set also missed. Both are fixed (`net-any`'s phrasing coverage,
-and the new `llm-capability-override` rule); see the Changelog. Scanning the
-official `mcp-server-git`, `mcp-server-filesystem`, and `mcp-server-time` reference
-servers — whose tools are each narrowly scoped and explicitly say so ("Only works
-within allowed directories", for the filesystem server) — correctly produces zero
-findings across all three, evidence against the rules just being noisy
-pattern-matching.
+and the new `llm-capability-override` rule); see the Changelog. Scanning five more
+official reference servers — `mcp-server-git`, `mcp-server-filesystem`,
+`mcp-server-time`, `mcp-server-sqlite`, and `server-everything` — correctly
+produces zero findings across all five (their tools are narrowly scoped and say so
+explicitly, e.g. "Only works within allowed directories"), evidence against the
+rules just being noisy pattern-matching. Full notes: [`docs/AUDIT_NOTES.md`](docs/AUDIT_NOTES.md).
 
-This testing also surfaced an unrelated real bug: `mcp-guard` had no timeout, so a
-server launched via `npx` (a very common way MCP servers are documented to be run)
-could hang forever instead of erroring, because npx itself can delay/swallow the
-initialize handshake. Fixed with a `--timeout` flag (default 30s) on `scan`/`probe`
-that fails with a clear message instead of hanging.
+This testing also surfaced an unrelated real bug, twice, independently: `mcp-guard`
+had no timeout, so a server launched via `npx` (a very common way MCP servers are
+documented to be run) could hang forever instead of erroring, because npx itself
+can delay/swallow the initialize handshake. Fixed with a `--timeout` flag (default
+30s) on `scan`/`probe` that fails with a clear message instead of hanging.
 
 ## Live probing (`mcp-guard probe`) — experimental
 

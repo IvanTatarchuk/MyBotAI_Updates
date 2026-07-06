@@ -13,6 +13,20 @@ real servers" section for the summary version.
 | `mcp-server-git` (PyPI) | none | True negative — tools narrowly scoped (`git_status`, `git_diff`, ...) |
 | `mcp-server-time` (PyPI) | none | True negative |
 | `@modelcontextprotocol/server-filesystem` (npm) | none | True negative — every tool description explicitly says "Only works within allowed directories" |
+| `mcp-server-sqlite` (PyPI) | none | Considered, not flagged — see note below |
+| `@modelcontextprotocol/server-everything` (npm) | none | True negative — demo/test tools (`echo`, `add`, ...) |
+
+### The `mcp-server-sqlite` non-finding, considered deliberately
+
+Its `write_query` tool: "Execute an INSERT, UPDATE, or DELETE query on the SQLite
+database" — takes a raw SQL string and runs it. That's a real capability to hand an
+agent (it can delete/corrupt data), but it's the *transparently intended* function
+of a database-write tool, not a hidden or unusually broad grant — every legitimate
+DB-integration MCP server will have a tool shaped like this. Flagging it would mean
+flagging essentially every database server that exists, which is noise, not
+signal — same reasoning as not flagging `git_commit`/`git_reset` for modifying
+repo state. `sql-unrestricted` stays scoped to tools that claim *unbounded/arbitrary*
+query construction, not to "runs a write query" as such.
 
 ## The `mcp-server-fetch` finding, in full
 
@@ -60,7 +74,10 @@ other real, popular servers."
 `npx -y @modelcontextprotocol/server-filesystem ...` hung `mcp-guard scan`
 forever — no timeout existed anywhere in the stdio client code. Root cause was
 specific to npx's process handling (a direct `node dist/index.js` invocation of
-the identical server connected immediately). Fixed with a `--timeout` flag
-(default 30s). Worth calling out because `npx ...` is *the* standard way MCP
-server READMEs tell people to run these servers — this would have been the
-first thing a lot of real users hit.
+the identical server connected immediately). Reproduced a second time,
+independently, against `@modelcontextprotocol/server-everything` — same hang,
+same fix (resolve to `node dist/index.js` directly), confirming this is a
+general npx interop issue rather than something specific to one package. Fixed
+with a `--timeout` flag (default 30s). Worth calling out because `npx ...` is
+*the* standard way MCP server READMEs tell people to run these servers — this
+would have been the first thing a lot of real users hit.
