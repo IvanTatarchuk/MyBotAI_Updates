@@ -9,9 +9,11 @@
   and calls every tool once with synthesized arguments, inside a sandbox built
   entirely on `unshare` (no Docker/bubblewrap dependency) that blocks both outbound
   network access and filesystem writes outside a throwaway tmpfs scratch space.
-  Requires explicit `--yes` since it executes real code. See THREAT_MODEL.md for
-  exact isolation boundaries (reads aren't blocked, separately-mounted filesystems
-  aren't covered by the read-only remount).
+  Requires explicit `--yes` since it executes real code. The read-only remount
+  walks `/proc/self/mountinfo` and covers every real mountpoint, not just `/` —
+  a separately-mounted filesystem (second disk, Docker volume, network share)
+  is covered too, not only whatever's mounted at the target's working directory.
+  See THREAT_MODEL.md for exact isolation boundaries (reads aren't blocked).
 - `mcp-guard rules`: lists every active detection rule.
 - `ruff` + `mypy`, wired into a CI lint job.
 - New rules: `sql-unrestricted`, `process-spawn`, `ssrf-risk`, `cloud-admin-access`,

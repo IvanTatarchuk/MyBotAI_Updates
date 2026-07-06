@@ -33,11 +33,15 @@ genuine attempt, not a simulated one:
   a file and returns its contents as the call result, that result travels back
   over the same stdio pipe `probe` is talking to it on, and will show up in
   `probe`'s own output. `probe` doesn't redact or inspect return values for this.
-- **NOT isolated: separately-mounted filesystems.** The read-only remount is
-  non-recursive — it covers whatever filesystem the target's working directory
-  lives on, but a *separately mounted* filesystem elsewhere on the host (a second
-  disk, a Docker volume, a network share) would remain writable if the probed
-  tool wrote there. Verified empirically; not just a theoretical caveat.
+- **Isolated: separately-mounted filesystems too.** The sandbox walks
+  `/proc/self/mountinfo` and bind-remounts every real mountpoint read-only, not
+  just `/` — so a second disk, a Docker volume, or a network share mounted
+  elsewhere on the host is covered, not only whatever filesystem the target's
+  working directory happens to live on. Pseudo-filesystems (`proc`, `sysfs`,
+  `devpts`, ...) are skipped since remounting those read-only doesn't add a
+  security boundary and can break normal process behavior. Verified against a
+  filesystem mounted outside the sandbox specifically to test this
+  (`tests/test_sandbox_integration.py`).
 - **PID namespace is not a security boundary.** It prevents the probed process
   from seeing/signaling unrelated host processes, but that's isolation of
   visibility, not a defense against filesystem/network abuse (which the other
@@ -97,10 +101,10 @@ instead of going through `npx`.
 
 ## Roadmap toward reducing these gaps
 
-The remaining gaps for `probe` are: recursive read-only coverage of separately
-mounted filesystems (needs per-mount handling, the way bubblewrap/Docker do it,
-rather than a single non-recursive bind-remount), and reasoning about return-value
-exfiltration (a tool can still hand back the contents of anything it can read).
-Neither is blocking for the common case — a server whose working directory lives
-on the same filesystem as everything else — but don't treat `probe` as a
-guarantee against a sophisticated, deliberately adversarial server.
+The remaining gap for `probe` is return-value exfiltration (a tool can still hand
+back the contents of anything it can read, over the same stdio channel `probe`
+talks to it on) — there's no way to close that without restricting what the tool
+can read in the first place, which would defeat the point of observing real
+behavior. Don't treat `probe` as a guarantee against a sophisticated,
+deliberately adversarial server; it's a large step up from static analysis, not
+a full sandbox audit.

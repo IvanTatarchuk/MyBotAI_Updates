@@ -154,7 +154,7 @@ mcp-guard probe --stdio "python examples/sample_server.py" --yes
 
 ```
 Sandbox: network-isolated (`unshare --net`, no outbound access) and filesystem-isolated
-(rootfs bind-remounted read-only, tmpfs scratch at /tmp) — see THREAT_MODEL.md for exact scope
+(rootfs + every submount bind-remounted read-only, tmpfs scratch at /tmp) — see THREAT_MODEL.md for exact scope
 
   Tool                   Result          Detail
   ─────────────────────  ──────────────  ──────────────────────────────────────
@@ -185,7 +185,7 @@ not adversarial fuzzing, one call per tool, etc).
 ## Roadmap
 
 - [x] Live execution probing, network-isolated (not just static description analysis)
-- [x] Filesystem isolation for `probe` (read-only rootfs + tmpfs scratch, via `unshare`)
+- [x] Filesystem isolation for `probe` (recursive read-only rootfs + all submounts, tmpfs scratch, via `unshare`)
 - [x] `mcp-guard.json` policy file for CI gating (fail build above a severity threshold)
 - [x] GitHub Action
 - [ ] Hosted registry of scanned/verified MCP servers with re-scan on new releases
