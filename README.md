@@ -119,17 +119,18 @@ See [`mcp_guard/rules/README.md`](mcp_guard/rules/README.md).
 ## Live probing (`mcp-guard probe`) — experimental
 
 `scan` only reads text. `probe` actually launches the server and calls every tool
-once, with placeholder arguments synthesized from its input schema, inside a
-sandbox that blocks outbound network access (Linux network namespaces via
-`unshare --net`):
+once, with placeholder arguments synthesized from its input schema, inside a sandbox
+that blocks outbound network access **and** filesystem writes outside a throwaway
+scratch space — built entirely on Linux namespaces (`unshare`), no Docker or
+bubblewrap required:
 
 ```bash
 mcp-guard probe --stdio "python examples/sample_server.py" --yes
 ```
 
 ```
-Sandbox: network-isolated via `unshare --net` (outbound network access blocked);
-filesystem access is NOT isolated — see THREAT_MODEL.md
+Sandbox: network-isolated (`unshare --net`, no outbound access) and filesystem-isolated
+(rootfs bind-remounted read-only, tmpfs scratch at /tmp) — see THREAT_MODEL.md for exact scope
 
   Tool                   Result          Detail
   ─────────────────────  ──────────────  ──────────────────────────────────────
@@ -137,26 +138,30 @@ filesystem access is NOT isolated — see THREAT_MODEL.md
   add_numbers            ok              0.0
   run_shell_command      ok              (not actually executed) would run: ...
   read_any_file          ok              (not actually executed) would read: ...
+  write_outside_tmp      blocked/error   Error executing tool write_outside_tmp:
+                                         [Errno 30] Read-only file system: ...
   check_internet_access  blocked/error   Error executing tool check_internet_
                                          access: [Errno 101] Network is unreachable
 
-  5 tools called, 1 blocked or errored
+  6 tools called, 2 blocked or errored
 ```
 
-That last row is a real, verified network-namespace block, not a simulated one —
-`examples/sample_server.py`'s `check_internet_access` tool makes a genuine outbound
-connection attempt, and the sandbox actually stops it (see
-`tests/test_sandbox_integration.py`).
+Those last two rows are real, verified sandbox blocks, not simulated ones —
+`examples/sample_server.py`'s `write_outside_tmp` and `check_internet_access` tools
+make genuine write/connect attempts, and the sandbox actually stops both (see
+`tests/test_sandbox_integration.py`, which asserts the canary file never gets
+created on disk).
 
-**Requires `--yes`** — this runs the target's real code. **The sandbox only isolates
-the network**, not the filesystem: a probed tool can still read/write real files.
-Requires `unshare` (util-linux; present on virtually every Linux distro). Read
-[`THREAT_MODEL.md`](THREAT_MODEL.md) before relying on this.
+**Requires `--yes`** — this runs the target's real code. Requires `unshare`
+(util-linux; present on virtually every Linux distro). Read
+[`THREAT_MODEL.md`](THREAT_MODEL.md) for the exact isolation boundaries (PID
+namespace isn't a security boundary by itself, arguments are benign placeholders
+not adversarial fuzzing, one call per tool, etc).
 
 ## Roadmap
 
 - [x] Live execution probing, network-isolated (not just static description analysis)
-- [ ] Filesystem isolation for `probe` (bubblewrap/Docker backend, scratch-dir-only writes)
+- [x] Filesystem isolation for `probe` (read-only rootfs + tmpfs scratch, via `unshare`)
 - [x] `mcp-guard.json` policy file for CI gating (fail build above a severity threshold)
 - [x] GitHub Action
 - [ ] Hosted registry of scanned/verified MCP servers with re-scan on new releases

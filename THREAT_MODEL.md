@@ -10,25 +10,38 @@ It reads a tool's `name`, `description`, and `inputSchema` — text — and patt
 that text against a rule list. It never executes the tool, never inspects the server's
 actual source code or runtime behavior, and never proves anything.
 
-## `probe` — live execution, network-isolated only
+## `probe` — live execution, sandboxed
 
 `probe` actually launches the server and calls every tool once with synthesized
-arguments, inside a sandbox built on Linux network namespaces (`unshare --net`).
-Be precise about what that sandbox does and doesn't cover:
+arguments, inside a sandbox built entirely on Linux namespaces (`unshare` — no
+Docker/bubblewrap dependency). Be precise about what that sandbox does and
+doesn't cover — every claim below is backed by a test in
+`tests/test_sandbox_integration.py` that proves it against a tool making a
+genuine attempt, not a simulated one:
 
 - **Isolated: outbound network access.** The probed process gets an empty network
   namespace — no route to anything, including localhost services outside its own
-  namespace. This is real and verified (`tests/test_sandbox_integration.py` proves
-  it against a tool that makes a genuine connection attempt), not a claim.
-- **NOT isolated: the filesystem.** A probed tool can read and write real files with
-  the same permissions this process has. If you probe a server you don't trust, and
-  one of its tools deletes files or writes somewhere unexpected, `probe` will not
-  stop it — it will happen for real. This is the single biggest caveat: don't run
-  `probe` against a server you're not willing to have full filesystem access to your
-  machine.
-- **NOT isolated: PID namespace is separate but not a security boundary** — it
-  prevents the probed process from seeing/signaling unrelated host processes, but
-  offers no protection against filesystem or resource abuse.
+  namespace.
+- **Isolated: filesystem writes outside a scratch directory.** The root filesystem
+  is bind-mounted back onto itself and remounted read-only inside the sandbox's
+  private mount namespace; `/tmp` is a fresh tmpfs the process can write to
+  freely. Any write elsewhere fails at the kernel level (`EROFS`).
+- **NOT isolated: filesystem reads.** The probed tool sees the real filesystem
+  (read-only), so it can still read anything this process could — including
+  secrets. Combined with network isolation this blocks *network* exfiltration,
+  but **not exfiltration through the tool's own return value**: if a tool reads
+  a file and returns its contents as the call result, that result travels back
+  over the same stdio pipe `probe` is talking to it on, and will show up in
+  `probe`'s own output. `probe` doesn't redact or inspect return values for this.
+- **NOT isolated: separately-mounted filesystems.** The read-only remount is
+  non-recursive — it covers whatever filesystem the target's working directory
+  lives on, but a *separately mounted* filesystem elsewhere on the host (a second
+  disk, a Docker volume, a network share) would remain writable if the probed
+  tool wrote there. Verified empirically; not just a theoretical caveat.
+- **PID namespace is not a security boundary.** It prevents the probed process
+  from seeing/signaling unrelated host processes, but that's isolation of
+  visibility, not a defense against filesystem/network abuse (which the other
+  two namespaces above actually provide).
 - **Arguments are synthesized, not adversarial.** Placeholder values (empty-ish
   strings, zeros, `false`) are enough to exercise a tool's real code path, but
   `probe` makes no attempt at fuzzing, injection payloads, or adversarial inputs —
@@ -74,8 +87,10 @@ actually reading the code of anything you give real permissions to.
 
 ## Roadmap toward reducing these gaps
 
-The remaining structural gap is filesystem isolation for `probe` — tracked in the
-README roadmap as a bubblewrap/Docker backend that would confine writes to a
-scratch directory and make the real filesystem read-only. Until that lands, treat
-`probe` as: safe from network exfiltration, but not safe from a malicious or buggy
-tool that damages the local filesystem.
+The remaining gaps for `probe` are: recursive read-only coverage of separately
+mounted filesystems (needs per-mount handling, the way bubblewrap/Docker do it,
+rather than a single non-recursive bind-remount), and reasoning about return-value
+exfiltration (a tool can still hand back the contents of anything it can read).
+Neither is blocking for the common case — a server whose working directory lives
+on the same filesystem as everything else — but don't treat `probe` as a
+guarantee against a sophisticated, deliberately adversarial server.

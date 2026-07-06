@@ -8,31 +8,61 @@ class SandboxUnavailable(RuntimeError):
 
 
 SANDBOX_DESCRIPTION = (
-    "network-isolated via `unshare --net` (outbound network access blocked); "
-    "filesystem access is NOT isolated — see THREAT_MODEL.md"
+    "network-isolated (`unshare --net`, no outbound access) and filesystem-isolated "
+    "(rootfs bind-remounted read-only, tmpfs scratch at /tmp) — see THREAT_MODEL.md for exact scope"
+)
+
+# Runs inside the new mount namespace, before exec'ing the real command:
+#   1. break mount propagation to the host (so nothing below can leak back)
+#   2. bind-mount / onto itself so it becomes remountable
+#   3. remount that bind as read-only — the entire real filesystem, read-only
+#   4. give the process a writable tmpfs scratch space at /tmp
+#   5. exec the real command, replacing this shell (no extra process, stdio untouched)
+_FS_ISOLATION_SCRIPT = (
+    "mount --make-rprivate / && "
+    "mount --bind / / && "
+    "mount -o remount,bind,ro / && "
+    "mount -t tmpfs tmpfs /tmp && "
+    'exec "$@"'
 )
 
 
 def build_sandboxed_command(command: list[str]) -> list[str]:
-    """Wrap `command` so the process it launches has no outbound network access.
+    """Wrap `command` so it runs network-isolated and with a read-only filesystem.
 
-    Uses Linux network namespaces (`unshare --net`), which is the one isolation
-    primitive we can rely on being available (util-linux) without adding a
-    dependency on Docker or bubblewrap. This does NOT isolate the filesystem —
-    a probed tool can still read and write real files. Callers must treat probe
-    results accordingly (see THREAT_MODEL.md).
+    Built entirely on `unshare` (util-linux) — no Docker or bubblewrap dependency:
 
-    Raises SandboxUnavailable if `unshare` isn't on PATH, or isn't usable in
-    this environment — probing must refuse rather than silently fall back to
-    running the command unsandboxed.
+    - `--net`: fresh, empty network namespace. No outbound access at all.
+    - `--mount` + a bind-remount of `/` as read-only: the process sees the real
+      filesystem (so it behaves like it would in production) but any write
+      outside of `/tmp` fails at the kernel level.
+    - `/tmp` is a fresh tmpfs: the process gets real, writable scratch space
+      that vanishes with the sandboxed process.
+    - `--pid` + `--mount-proc`: separate process namespace, so the sandboxed
+      process can't see or signal unrelated processes on the host.
+
+    Raises SandboxUnavailable if `unshare` isn't on PATH — probing must refuse
+    rather than silently fall back to running the command unsandboxed.
     """
     if shutil.which("unshare") is None:
         raise SandboxUnavailable(
-            "`unshare` (from util-linux) was not found on PATH. It's required to isolate "
-            "network access before probing. Install util-linux, or don't use `mcp-guard probe`."
+            "`unshare` (from util-linux) was not found on PATH. It's required to sandbox "
+            "the server before probing. Install util-linux, or don't use `mcp-guard probe`."
         )
 
-    return ["unshare", "--net", "--pid", "--mount-proc", "--fork", "--"] + command
+    return [
+        "unshare",
+        "--mount",
+        "--net",
+        "--pid",
+        "--mount-proc",
+        "--fork",
+        "--",
+        "sh",
+        "-c",
+        _FS_ISOLATION_SCRIPT,
+        "sh",
+    ] + command
 
 
 def describe_sandbox() -> str:

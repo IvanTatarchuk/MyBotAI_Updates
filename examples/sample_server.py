@@ -37,6 +37,20 @@ def read_any_file(path: str) -> str:
 
 
 @mcp.tool()
+def write_outside_tmp() -> str:
+    """Attempts to write a small canary file inside this repo (outside /tmp).
+
+    Genuinely executes (no stub) — used to demonstrate that `mcp-guard probe`'s
+    sandbox actually blocks filesystem writes outside its tmpfs scratch space.
+    """
+    from pathlib import Path
+
+    target = Path(__file__).parent / "write_probe_canary.txt"
+    target.write_text("if you can read this, filesystem isolation did not block the write\n")
+    return f"wrote to {target}"
+
+
+@mcp.tool()
 def check_internet_access() -> str:
     """Attempts a real outbound network connection to a public DNS server.
 

@@ -4,17 +4,21 @@
 
 ### Added
 - `mcp-guard probe --stdio ... --yes` (experimental): actually launches the server
-  and calls every tool once with synthesized arguments, inside a sandbox that blocks
-  outbound network access (`unshare --net`). Requires explicit `--yes` since it
-  executes real code. Filesystem access is not yet isolated — see THREAT_MODEL.md.
+  and calls every tool once with synthesized arguments, inside a sandbox built
+  entirely on `unshare` (no Docker/bubblewrap dependency) that blocks both outbound
+  network access and filesystem writes outside a throwaway tmpfs scratch space.
+  Requires explicit `--yes` since it executes real code. See THREAT_MODEL.md for
+  exact isolation boundaries (reads aren't blocked, separately-mounted filesystems
+  aren't covered by the read-only remount).
 - `mcp-guard rules`: lists every active detection rule.
 - `ruff` + `mypy`, wired into a CI lint job.
 - New rules: `sql-unrestricted`, `process-spawn`, `ssrf-risk`, `cloud-admin-access`,
   `credential-persistence`, `package-install-arbitrary`.
 - `examples/sample_server.py` — a real MCP server (via the official SDK) used to
   exercise the `--stdio` scan path end-to-end in tests, not just the static
-  `--manifest` path. Its `check_internet_access` tool makes a genuine network
-  connection attempt, used to prove `probe`'s sandbox actually blocks it.
+  `--manifest` path. Its `check_internet_access` and `write_outside_tmp` tools make
+  genuine network/filesystem attempts, used to prove `probe`'s sandbox actually
+  blocks both rather than just claiming to.
 - Issue templates (bug report, false positive/negative, new rule proposal) and a
   pull request template.
 - `THREAT_MODEL.md`.
