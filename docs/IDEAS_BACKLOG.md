@@ -47,3 +47,12 @@ rules.
 Come back to this file after: mcp-guard v0.2.0 is published to PyPI, has been
 posted publicly (HN/Reddit/relevant communities), and has collected real
 external feedback (issues, PRs, or usage signal) — not just internal testing.
+
+**Status update (2026-07-06): overridden deliberately.** Decided to start the AI
+agent tournament/arena platform now, before the condition above was met — this
+is a conscious choice (confirmed when explicitly asked), not an unflagged pivot.
+Monetization resolved to cosmetics/skins only, no cashout, no real-money
+wagering — sidesteps the gambling-law complexity entirely, so section 2 above
+("entry-fee tournaments") is *not* the model being built. mcp-guard is not
+abandoned; it's paused mid-flight (v0.2.0 ready, unpublished) while this is
+built as a second, parallel project.
