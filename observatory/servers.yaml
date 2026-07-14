@@ -1,0 +1,140 @@
+# MCP Security Observatory — server registry.
+#
+# Each entry is a *real, public* MCP server that the observatory scans with
+# `mcp-guard scan`. The `command` is the stdio launch line, written so it runs
+# from the directory where the package is installed (see observatory/README.md).
+#
+# `install` documents how to obtain the server; it is not run automatically —
+# the scan harness assumes the servers are already installed (npm/pip) so a
+# scan run stays fast and reproducible. Versions are pinned in results.json at
+# scan time, not here, so this file stays a stable catalogue.
+#
+# Adding a server: append an entry, install it, re-run `python observatory/scan.py`.
+# Findings are produced by mcp-guard's public rule set — this file contains no
+# hand-written verdicts.
+
+- name: server-filesystem
+  package: "@modelcontextprotocol/server-filesystem"
+  ecosystem: npm
+  official: true
+  install: "npm i @modelcontextprotocol/server-filesystem"
+  command: "node node_modules/@modelcontextprotocol/server-filesystem/dist/index.js /tmp"
+
+- name: server-memory
+  package: "@modelcontextprotocol/server-memory"
+  ecosystem: npm
+  official: true
+  install: "npm i @modelcontextprotocol/server-memory"
+  command: "node node_modules/@modelcontextprotocol/server-memory/dist/index.js"
+
+- name: server-everything
+  package: "@modelcontextprotocol/server-everything"
+  ecosystem: npm
+  official: true
+  install: "npm i @modelcontextprotocol/server-everything"
+  command: "node node_modules/@modelcontextprotocol/server-everything/dist/index.js"
+
+- name: server-sequential-thinking
+  package: "@modelcontextprotocol/server-sequential-thinking"
+  ecosystem: npm
+  official: true
+  install: "npm i @modelcontextprotocol/server-sequential-thinking"
+  command: "node node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js"
+
+# Note: several popular servers (Slack, GitLab, Google Maps, Brave Search)
+# refuse to enumerate their tool list until a real API credential is present,
+# so they can't be scanned in an unattended run and are intentionally omitted
+# for now. `@wonderwhy-er/desktop-commander` writes non-JSON-RPC banner output
+# to stdout, which breaks a strict MCP stdio client before tools/list — a real
+# interoperability bug in that server, but it also keeps it out of this run.
+
+- name: server-puppeteer
+  package: "@modelcontextprotocol/server-puppeteer"
+  ecosystem: npm
+  official: true
+  install: "npm i @modelcontextprotocol/server-puppeteer"
+  command: "node node_modules/@modelcontextprotocol/server-puppeteer/dist/index.js"
+
+- name: server-github
+  package: "@modelcontextprotocol/server-github"
+  ecosystem: npm
+  official: true
+  install: "npm i @modelcontextprotocol/server-github"
+  command: "node node_modules/@modelcontextprotocol/server-github/dist/index.js"
+
+- name: server-postgres
+  package: "@modelcontextprotocol/server-postgres"
+  ecosystem: npm
+  official: true
+  install: "npm i @modelcontextprotocol/server-postgres"
+  command: "node node_modules/@modelcontextprotocol/server-postgres/dist/index.js postgresql://localhost/db"
+
+- name: mcp-server-fetch
+  package: mcp-server-fetch
+  ecosystem: pypi
+  official: true
+  install: "pip install mcp-server-fetch"
+  command: "python -m mcp_server_fetch"
+
+- name: mcp-server-git
+  package: mcp-server-git
+  ecosystem: pypi
+  official: true
+  install: "pip install mcp-server-git"
+  command: "python -m mcp_server_git"
+
+- name: mcp-server-time
+  package: mcp-server-time
+  ecosystem: pypi
+  official: true
+  install: "pip install mcp-server-time"
+  command: "python -m mcp_server_time"
+
+- name: mcp-server-sqlite
+  package: mcp-server-sqlite
+  ecosystem: pypi
+  official: true
+  install: "pip install mcp-server-sqlite"
+  command: "mcp-server-sqlite --db-path /tmp/obs.db"
+
+- name: mcp-server-commands
+  package: mcp-server-commands
+  ecosystem: npm
+  official: false
+  install: "npm i mcp-server-commands"
+  command: "node node_modules/mcp-server-commands/build/index.js"
+
+- name: mcp-shell
+  package: mcp-shell
+  ecosystem: npm
+  official: false
+  install: "npm i mcp-shell"
+  command: "node node_modules/mcp-shell/build/index.js"
+
+- name: mcp-server-kubernetes
+  package: mcp-server-kubernetes
+  ecosystem: npm
+  official: false
+  install: "npm i mcp-server-kubernetes"
+  command: "node node_modules/mcp-server-kubernetes/dist/index.js"
+
+- name: shell-mcp
+  package: "@kevinwatt/shell-mcp"
+  ecosystem: npm
+  official: false
+  install: "npm i @kevinwatt/shell-mcp"
+  command: "node node_modules/@kevinwatt/shell-mcp/build/index.js"
+
+- name: code-runner
+  package: mcp-server-code-runner
+  ecosystem: npm
+  official: false
+  install: "npm i mcp-server-code-runner"
+  command: "node node_modules/mcp-server-code-runner/dist/cli.js"
+
+- name: cyanheads-git-mcp-server
+  package: "@cyanheads/git-mcp-server"
+  ecosystem: npm
+  official: false
+  install: "npm i @cyanheads/git-mcp-server"
+  command: "node node_modules/@cyanheads/git-mcp-server/dist/index.js"

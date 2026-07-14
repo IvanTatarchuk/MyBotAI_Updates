@@ -22,6 +22,29 @@ The goal: give people a fast, honest signal on "how much do I trust this MCP ser
 [Socket](https://socket.dev) solves for npm/PyPI supply-chain risk, but for MCP tool
 definitions.
 
+Two things set `mcp-guard` apart from a plain description linter:
+
+1. **It runs the servers.** `mcp-guard probe` launches the real server in a Linux-namespace
+   sandbox and calls every tool, so you can see what it *actually* does — not just what its
+   descriptions claim. ([jump ↓](#live-probing-mcp-guard-probe--experimental))
+2. **It publishes data, not just a CLI.** The [**MCP Security Observatory**](OBSERVATORY.md)
+   is a reproducible scan of real, public MCP servers — every verdict regenerable from the
+   committed `results.json`.
+
+## MCP Security Observatory
+
+We scan real, public MCP servers and publish the results: **[OBSERVATORY.md](OBSERVATORY.md)**
+(and a [leaderboard page](docs/index.html)). From the latest run of 17 servers / 166 tools:
+
+- **13 of 17 scanned clean** — the rule set doesn't cry wolf; well-scoped servers pass.
+- The official **`mcp-server-fetch`** ships a real **prompt-injection payload** aimed at the
+  calling LLM (flagged `llm-capability-override`, high). *Provenance is not safety.*
+- Community shell servers (`mcp-server-commands`, `mcp-shell`) expose **unrestricted shell
+  execution** — fine if you meant to, alarming if you didn't.
+
+It's all reproducible — see [`observatory/`](observatory/). Want your server on the board?
+Open a PR against [`observatory/servers.yaml`](observatory/servers.yaml).
+
 ## Status
 
 Early / v0.1. Rule-based static scanner. Contributions and new rules welcome.
@@ -188,7 +211,8 @@ not adversarial fuzzing, one call per tool, etc).
 - [x] Filesystem isolation for `probe` (recursive read-only rootfs + all submounts, tmpfs scratch, via `unshare`)
 - [x] `mcp-guard.json` policy file for CI gating (fail build above a severity threshold)
 - [x] GitHub Action
-- [ ] Hosted registry of scanned/verified MCP servers with re-scan on new releases
+- [x] [MCP Security Observatory](OBSERVATORY.md) — reproducible published scans of real, public servers
+- [ ] Hosted registry with automatic re-scan on new releases (Observatory is step one)
 
 ## License
 

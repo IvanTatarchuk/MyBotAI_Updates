@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+- **MCP Security Observatory** (`observatory/`): a reproducible scan of real, public
+  MCP servers, built on `mcp-guard`'s own public API — no hand-written verdicts.
+  `observatory/servers.yaml` catalogues the servers, `observatory/scan.py` enumerates
+  their tools and applies the rule set into `observatory/results.json`, and
+  `observatory/generate.py` renders `OBSERVATORY.md` plus a static leaderboard at
+  `docs/index.html`. First run: 17 servers / 166 tools, 13 clean, and a real
+  prompt-injection finding in the official `mcp-server-fetch`.
+- `.github/workflows/pages.yml`: publishes the Observatory leaderboard to GitHub Pages.
+
 ## 0.2.0 - 2026-07-06
 
 ### Added

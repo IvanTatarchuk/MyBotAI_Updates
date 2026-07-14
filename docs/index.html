@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP Security Observatory</title>
+<style>
+:root {
+  --bg:#0d1117; --card:#161b22; --line:#30363d; --fg:#e6edf3; --muted:#8b949e;
+  --high:#f85149; --medium:#d29922; --low:#58a6ff; --clean:#3fb950;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg:#ffffff; --card:#f6f8fa; --line:#d0d7de; --fg:#1f2328; --muted:#636c76; }
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--fg);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
+.wrap { max-width:920px; margin:0 auto; padding:40px 20px 80px; }
+h1 { font-size:1.9rem; margin:0 0 6px; }
+.sub { color:var(--muted); margin:0 0 28px; }
+.stats { display:flex; flex-wrap:wrap; gap:12px; margin:0 0 28px; }
+.stat { background:var(--card); border:1px solid var(--line); border-radius:10px;
+  padding:14px 18px; flex:1; min-width:120px; }
+.stat b { display:block; font-size:1.7rem; line-height:1.1; }
+.stat span { color:var(--muted); font-size:.82rem; }
+.stat.high b { color:var(--high); } .stat.clean b { color:var(--clean); }
+.tablewrap { overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+table { width:100%; border-collapse:collapse; min-width:600px; }
+th,td { text-align:left; padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { color:var(--muted); font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; }
+tr:last-child td { border-bottom:none; }
+td.num { text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; }
+.name { font-weight:600; }
+.ver { color:var(--muted); font-weight:400; font-size:.8rem; margin-left:7px; }
+.chip { display:inline-block; font-size:.76rem; padding:2px 8px; border-radius:20px;
+  margin:2px 4px 2px 0; border:1px solid var(--line); white-space:nowrap; }
+.chip.high { background:color-mix(in srgb,var(--high) 18%,transparent); border-color:var(--high); }
+.chip.medium { background:color-mix(in srgb,var(--medium) 18%,transparent); border-color:var(--medium); }
+.chip.low { background:color-mix(in srgb,var(--low) 18%,transparent); border-color:var(--low); }
+.chip.clean { color:var(--clean); border-color:color-mix(in srgb,var(--clean) 50%,var(--line)); }
+.src { font-size:.76rem; padding:2px 8px; border-radius:6px; background:var(--bg);
+  border:1px solid var(--line); color:var(--muted); }
+.foot { color:var(--muted); font-size:.85rem; margin-top:26px; }
+a { color:var(--low); }
+code { background:var(--card); padding:1px 5px; border-radius:5px; font-size:.85em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MCP Security Observatory</h1>
+  <p class="sub">Reproducible security scans of real, public MCP servers, powered by
+    <a href="https://github.com/IvanTatarchuk/MyBotAI_Updates">mcp-guard</a>.
+    Last scan 2026-07-14.</p>
+
+  <div class="stats">
+    <div class="stat"><b>17</b><span>servers scanned</span></div>
+    <div class="stat"><b>166</b><span>tools inspected</span></div>
+    <div class="stat clean"><b>13</b><span>scanned clean</span></div>
+    <div class="stat high"><b>3</b><span>high findings</span></div>
+    <div class="stat"><b>2</b><span>medium findings</span></div>
+  </div>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Server</th><th>Source</th><th>Tools</th><th>Findings</th></tr></thead>
+    <tbody>
+<tr class="r-high"><td class="name">mcp-server-fetch<span class="ver">2026.7.10</span></td><td><span class="src official">official</span></td><td class="num">1</td><td class="findings"><span class="chip medium">fetch · net-any</span><span class="chip high">fetch · llm-capability-override</span></td></tr>
+<tr class="r-high"><td class="name">mcp-server-commands<span class="ver">0.8.2</span></td><td><span class="src community">community</span></td><td class="num">1</td><td class="findings"><span class="chip high">run_process · shell-exec</span></td></tr>
+<tr class="r-high"><td class="name">mcp-shell<span class="ver">0.1.3</span></td><td><span class="src community">community</span></td><td class="num">1</td><td class="findings"><span class="chip high">run_command · shell-exec</span></td></tr>
+<tr class="r-medium"><td class="name">mcp-server-kubernetes<span class="ver">4.0.2</span></td><td><span class="src community">community</span></td><td class="num">23</td><td class="findings"><span class="chip medium">kubectl_create · secret-handling</span></td></tr>
+<tr class="r-clean"><td class="name">code-runner</td><td><span class="src community">community</span></td><td class="num">1</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">cyanheads-git-mcp-server</td><td><span class="src community">community</span></td><td class="num">28</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">mcp-server-git<span class="ver">2026.7.10</span></td><td><span class="src official">official</span></td><td class="num">12</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">mcp-server-sqlite<span class="ver">2025.4.25</span></td><td><span class="src official">official</span></td><td class="num">6</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">mcp-server-time<span class="ver">2026.7.10</span></td><td><span class="src official">official</span></td><td class="num">2</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">server-everything<span class="ver">2026.7.4</span></td><td><span class="src official">official</span></td><td class="num">13</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">server-filesystem<span class="ver">2026.7.10</span></td><td><span class="src official">official</span></td><td class="num">14</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">server-github<span class="ver">2025.4.8</span></td><td><span class="src official">official</span></td><td class="num">26</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">server-memory<span class="ver">2026.7.4</span></td><td><span class="src official">official</span></td><td class="num">9</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">server-postgres<span class="ver">0.6.2</span></td><td><span class="src official">official</span></td><td class="num">1</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">server-puppeteer<span class="ver">2025.5.12</span></td><td><span class="src official">official</span></td><td class="num">7</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">server-sequential-thinking<span class="ver">2026.7.4</span></td><td><span class="src official">official</span></td><td class="num">1</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+<tr class="r-clean"><td class="name">shell-mcp<span class="ver">0.4.17</span></td><td><span class="src community">community</span></td><td class="num">20</td><td class="findings"><span class="chip clean">clean</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p class="foot">Findings come from <code>mcp-guard</code>'s public rule set applied to each
+    server's advertised tool metadata. A clean result is not a safety guarantee — see the project's
+    <code>THREAT_MODEL.md</code>. Regenerate with <code>observatory/scan.py</code> +
+    <code>observatory/generate.py</code>.</p>
+</div>
+</body>
+</html>

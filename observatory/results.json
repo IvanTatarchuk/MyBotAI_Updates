@@ -1,0 +1,244 @@
+{
+  "generated_at": "2026-07-14T11:30:21+00:00",
+  "mcp_guard_rules": [
+    "shell-exec",
+    "fs-read-any",
+    "fs-write-any",
+    "net-any",
+    "secret-handling",
+    "prompt-injection-cue",
+    "eval-sink",
+    "sql-unrestricted",
+    "process-spawn",
+    "ssrf-risk",
+    "cloud-admin-access",
+    "credential-persistence",
+    "package-install-arbitrary",
+    "llm-capability-override"
+  ],
+  "servers_total": 17,
+  "servers_scanned": 17,
+  "results": [
+    {
+      "name": "server-filesystem",
+      "package": "@modelcontextprotocol/server-filesystem",
+      "ecosystem": "npm",
+      "official": true,
+      "version": "2026.7.10",
+      "status": "ok",
+      "error": null,
+      "tool_count": 14,
+      "findings": []
+    },
+    {
+      "name": "server-memory",
+      "package": "@modelcontextprotocol/server-memory",
+      "ecosystem": "npm",
+      "official": true,
+      "version": "2026.7.4",
+      "status": "ok",
+      "error": null,
+      "tool_count": 9,
+      "findings": []
+    },
+    {
+      "name": "server-everything",
+      "package": "@modelcontextprotocol/server-everything",
+      "ecosystem": "npm",
+      "official": true,
+      "version": "2026.7.4",
+      "status": "ok",
+      "error": null,
+      "tool_count": 13,
+      "findings": []
+    },
+    {
+      "name": "server-sequential-thinking",
+      "package": "@modelcontextprotocol/server-sequential-thinking",
+      "ecosystem": "npm",
+      "official": true,
+      "version": "2026.7.4",
+      "status": "ok",
+      "error": null,
+      "tool_count": 1,
+      "findings": []
+    },
+    {
+      "name": "server-puppeteer",
+      "package": "@modelcontextprotocol/server-puppeteer",
+      "ecosystem": "npm",
+      "official": true,
+      "version": "2025.5.12",
+      "status": "ok",
+      "error": null,
+      "tool_count": 7,
+      "findings": []
+    },
+    {
+      "name": "server-github",
+      "package": "@modelcontextprotocol/server-github",
+      "ecosystem": "npm",
+      "official": true,
+      "version": "2025.4.8",
+      "status": "ok",
+      "error": null,
+      "tool_count": 26,
+      "findings": []
+    },
+    {
+      "name": "server-postgres",
+      "package": "@modelcontextprotocol/server-postgres",
+      "ecosystem": "npm",
+      "official": true,
+      "version": "0.6.2",
+      "status": "ok",
+      "error": null,
+      "tool_count": 1,
+      "findings": []
+    },
+    {
+      "name": "mcp-server-fetch",
+      "package": "mcp-server-fetch",
+      "ecosystem": "pypi",
+      "official": true,
+      "version": "2026.7.10",
+      "status": "ok",
+      "error": null,
+      "tool_count": 1,
+      "findings": [
+        {
+          "tool": "fetch",
+          "rule_id": "net-any",
+          "severity": 2,
+          "message": "Unrestricted outbound network access"
+        },
+        {
+          "tool": "fetch",
+          "rule_id": "llm-capability-override",
+          "severity": 3,
+          "message": "Description addresses the calling LLM directly to override its prior beliefs about its own capabilities \u2014 a real prompt-injection pattern, not a hypothetical"
+        }
+      ]
+    },
+    {
+      "name": "mcp-server-git",
+      "package": "mcp-server-git",
+      "ecosystem": "pypi",
+      "official": true,
+      "version": "2026.7.10",
+      "status": "ok",
+      "error": null,
+      "tool_count": 12,
+      "findings": []
+    },
+    {
+      "name": "mcp-server-time",
+      "package": "mcp-server-time",
+      "ecosystem": "pypi",
+      "official": true,
+      "version": "2026.7.10",
+      "status": "ok",
+      "error": null,
+      "tool_count": 2,
+      "findings": []
+    },
+    {
+      "name": "mcp-server-sqlite",
+      "package": "mcp-server-sqlite",
+      "ecosystem": "pypi",
+      "official": true,
+      "version": "2025.4.25",
+      "status": "ok",
+      "error": null,
+      "tool_count": 6,
+      "findings": []
+    },
+    {
+      "name": "mcp-server-commands",
+      "package": "mcp-server-commands",
+      "ecosystem": "npm",
+      "official": false,
+      "version": "0.8.2",
+      "status": "ok",
+      "error": null,
+      "tool_count": 1,
+      "findings": [
+        {
+          "tool": "run_process",
+          "rule_id": "shell-exec",
+          "severity": 3,
+          "message": "Unrestricted shell execution"
+        }
+      ]
+    },
+    {
+      "name": "mcp-shell",
+      "package": "mcp-shell",
+      "ecosystem": "npm",
+      "official": false,
+      "version": "0.1.3",
+      "status": "ok",
+      "error": null,
+      "tool_count": 1,
+      "findings": [
+        {
+          "tool": "run_command",
+          "rule_id": "shell-exec",
+          "severity": 3,
+          "message": "Unrestricted shell execution"
+        }
+      ]
+    },
+    {
+      "name": "mcp-server-kubernetes",
+      "package": "mcp-server-kubernetes",
+      "ecosystem": "npm",
+      "official": false,
+      "version": "4.0.2",
+      "status": "ok",
+      "error": null,
+      "tool_count": 23,
+      "findings": [
+        {
+          "tool": "kubectl_create",
+          "rule_id": "secret-handling",
+          "severity": 2,
+          "message": "Tool appears to handle credentials/secrets without indication of redaction"
+        }
+      ]
+    },
+    {
+      "name": "shell-mcp",
+      "package": "@kevinwatt/shell-mcp",
+      "ecosystem": "npm",
+      "official": false,
+      "version": "0.4.17",
+      "status": "ok",
+      "error": null,
+      "tool_count": 20,
+      "findings": []
+    },
+    {
+      "name": "code-runner",
+      "package": "mcp-server-code-runner",
+      "ecosystem": "npm",
+      "official": false,
+      "version": null,
+      "status": "ok",
+      "error": null,
+      "tool_count": 1,
+      "findings": []
+    },
+    {
+      "name": "cyanheads-git-mcp-server",
+      "package": "@cyanheads/git-mcp-server",
+      "ecosystem": "npm",
+      "official": false,
+      "version": null,
+      "status": "ok",
+      "error": null,
+      "tool_count": 28,
+      "findings": []
+    }
+  ]
+}
