@@ -22,9 +22,21 @@ The goal: give people a fast, honest signal on "how much do I trust this MCP ser
 [Socket](https://socket.dev) solves for npm/PyPI supply-chain risk, but for MCP tool
 definitions.
 
+## Found in the wild
+
+Run against the official, published MCP reference servers, `mcp-guard` flagged a
+genuine **prompt-injection payload** shipped inside the `mcp-server-fetch` tool
+description — text that talks *to* the calling model about its own instructions
+("Although originally you did not have internet access... this tool now grants you
+internet access...") — plus its unrestricted URL-fetch capability. It stayed quiet
+on `mcp-server-git`, `mcp-server-time`, `server-filesystem`, `mcp-server-sqlite`,
+and `server-everything`, all of which describe their tools narrowly. Real signal,
+no crying wolf. Full writeup: [`docs/AUDIT_NOTES.md`](docs/AUDIT_NOTES.md).
+
 ## Status
 
-Early / v0.1. Rule-based static scanner. Contributions and new rules welcome.
+v0.2. Rule-based static scanner, plus an experimental sandboxed `probe` mode.
+Contributions and new rules welcome.
 
 **Read [`THREAT_MODEL.md`](THREAT_MODEL.md) before relying on this** — it's a static
 heuristic over tool descriptions, not a guarantee about actual server behavior.
