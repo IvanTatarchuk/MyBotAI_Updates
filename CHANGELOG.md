@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added
+- `py.typed` marker (PEP 561): the package is fully typed (`disallow_untyped_defs`
+  under mypy) and now ships that type information to downstream importers.
+- Tests locking `__version__` and `mcp-guard --version` to `pyproject.toml`, so
+  the version can't silently drift again.
+- PyPI metadata polish: trove classifiers, keywords, and `[project.urls]`
+  (Homepage/Repository/Issues/Changelog) so the project page is complete.
+- Python 3.13 added to the CI test matrix.
+
+### Fixed
+- `mcp_guard.__version__` was stale (`0.1.0` while the project was at `0.2.0`).
+  It's now resolved from installed package metadata, making `pyproject.toml` the
+  single source of truth instead of a second copy that has to be kept in sync.
+
 ## 0.2.0 - 2026-07-06
 
 ### Added
