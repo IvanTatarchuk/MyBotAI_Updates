@@ -98,18 +98,24 @@ def compute_features(bars: list[Bar], i: int, cfg: StrategyConfig) -> Features |
     )
 
 
+def precompute_features(bars: list[Bar], cfg: StrategyConfig) -> list[Features | None]:
+    """Features depend only on window lengths, not on thresholds, so parameter sweeps can reuse them."""
+    return [compute_features(bars, i, cfg) for i in range(len(bars))]
+
+
 class SqueezeDetector:
     """Per-symbol state machine: idle -> armed (crowd detected) -> signal (crowd breaking)."""
 
-    def __init__(self, cfg: StrategyConfig):
+    def __init__(self, cfg: StrategyConfig, features: list[Features | None] | None = None):
         self.cfg = cfg
+        self.features = features  # optional precomputed features (see precompute_features)
         self.armed: str | None = None  # "long_crowded" | "short_crowded"
         self.armed_until = -1
         self.armed_score = 0.0
 
     def step(self, bars: list[Bar], i: int) -> Signal | None:
         cfg = self.cfg
-        f = compute_features(bars, i, cfg)
+        f = self.features[i] if self.features is not None else compute_features(bars, i, cfg)
         if f is None or f.atr <= 0:
             return None
 
@@ -138,6 +144,8 @@ class SqueezeDetector:
         if f.oi_bar_change > -cfg.oi_drop_trigger:
             return None
         lb = cfg.breakout_lookback
+        if i < lb:
+            return None
         prev = bars[i - lb : i]
         bar = bars[i]
         if self.armed == "long_crowded" and bar.close < min(b.low for b in prev):

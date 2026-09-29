@@ -146,3 +146,50 @@ def test_paper_broker_stop_and_tp():
     b.on_closed_bar("XUSDT", Bar(0, 0.95, 1.2, 0.95, 1.15, 1, 1, 0, 1))
     assert b.sizes() == {}
     assert abs(b.cash - (100.5 - 0.5)) < 1e-9
+
+
+def test_trigger_ignores_too_short_history_with_precomputed_features():
+    from altcoin_squeeze_bot.strategy import precompute_features
+
+    cfg = StrategyConfig()
+    bars = generate(n=300)
+    feats = precompute_features(bars, cfg)
+    det = SqueezeDetector(cfg, feats[150:])
+    det.armed, det.armed_until = "short_crowded", 100
+    sliced = bars[150:]
+    for i in range(3):
+        assert det.step(sliced, i) is None  # would slice bars[-3:0] without the guard
+
+
+def test_features_cache_gives_identical_backtest():
+    from altcoin_squeeze_bot.strategy import precompute_features
+
+    data = universe(n_symbols=2, n=1200)
+    cfg = Config()
+    feats = {s: precompute_features(b, cfg.strategy) for s, b in data.items()}
+    a, b = run(data, cfg), run(data, cfg, features=feats)
+    assert [t.pnl for t in a.trades] == [t.pnl for t in b.trades]
+
+
+def test_validation_rejects_a_market_without_edge():
+    from altcoin_squeeze_bot.strategy import precompute_features
+    from altcoin_squeeze_bot.validate import DEFAULT_GRID, monte_carlo, plateau, stats, verdict, walk_forward
+
+    cfg = Config()
+    data = universe(n_symbols=4, n=4000, edge=False)
+    feats = {s: precompute_features(b, cfg.strategy) for s, b in data.items()}
+    grid = {"z_arm": [1.5, 2.5], "tp1_r": DEFAULT_GRID["tp1_r"][:2]}
+    wf = walk_forward(data, feats, cfg, grid, n_folds=3, min_trades=5)
+    pl = plateau(data, feats, cfg, grid)
+    share = sum(1 for _, s in pl if s.n > 0 and s.expectancy > 0) / len(pl)
+    checks = verdict(stats(wf.oos), share, monte_carlo(wf.oos, 0.015, 0.30, sims=500))
+    assert not all(ok for ok, _ in checks)
+
+
+def test_monte_carlo_and_stats_basics():
+    from altcoin_squeeze_bot.validate import monte_carlo, stats
+
+    s = stats([1.0, -1.0, 2.0, -1.0])
+    assert s.n == 4 and abs(s.expectancy - 0.25) < 1e-12 and abs(s.profit_factor - 1.5) < 1e-12
+    mc = monte_carlo([-1.0] * 40, risk=0.015, kill_dd=0.30, sims=50)
+    assert mc.p_kill == 1.0 and mc.median_return < 0

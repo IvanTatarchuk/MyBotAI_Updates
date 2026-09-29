@@ -7,7 +7,7 @@ Rules that keep it honest:
 - same sizing and circuit breakers as the live bot
 
 Usage:
-    python -m altcoin_squeeze_bot.backtest --synthetic
+    python -m altcoin_squeeze_bot.backtest --synthetic edge
     python -m altcoin_squeeze_bot.backtest --days 120 --top 25
     python -m altcoin_squeeze_bot.backtest --symbols WIFUSDT,PEPEUSDT --days 60
 """
@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 
 from .config import Config
 from .risk import RiskGuard, position_size
-from .strategy import Bar, Signal, SqueezeDetector, TradePlan, atr, new_plan, update_trail
+from .strategy import Bar, Features, Signal, SqueezeDetector, TradePlan, atr, new_plan, update_trail
 
 FUNDING_PERIOD_MS = 8 * 3_600_000
 
@@ -85,11 +85,16 @@ class Result:
         return "\n".join(lines)
 
 
-def run(data: dict[str, list[Bar]], cfg: Config, start_equity: float = 100.0) -> Result:
+def run(
+    data: dict[str, list[Bar]],
+    cfg: Config,
+    start_equity: float = 100.0,
+    features: dict[str, list[Features | None]] | None = None,
+) -> Result:
     sc, rc, cc = cfg.strategy, cfg.risk, cfg.costs
     step_ms = sc.interval_min * 60_000
     index = {s: {b.ts: i for i, b in enumerate(bars)} for s, bars in data.items()}
-    detectors = {s: SqueezeDetector(sc) for s in data}
+    detectors = {s: SqueezeDetector(sc, features.get(s) if features else None) for s in data}
     timeline = sorted({b.ts for bars in data.values() for b in bars})
 
     cash = start_equity
@@ -152,7 +157,8 @@ def run(data: dict[str, list[Bar]], cfg: Config, start_equity: float = 100.0) ->
                 pay = d * pos.qty * bar.close * bar.funding
                 cash -= pay
                 pos.realized -= pay
-            update_trail(plan, bar, atr(data[sym], i, sc.atr_period), sc)
+            f = features[sym][i] if features else None
+            update_trail(plan, bar, f.atr if f else atr(data[sym], i, sc.atr_period), sc)
             if plan.bars_held >= sc.max_hold_bars:
                 close(pos, pos.qty, bar.close * (1 - d * cc.slippage), ts, "time")
 
@@ -193,9 +199,42 @@ def _unrealized(open_pos: dict[str, Position], data, index, ts: int, prev: bool 
     return total
 
 
+def load_data(
+    cfg: Config, synthetic: str | None, symbols: str | None, top: int, days: int, cache: str | None
+) -> dict[str, list[Bar]]:
+    if synthetic:
+        from .synthetic import universe
+
+        return universe(n_symbols=8, n=6000, edge=synthetic == "edge")
+
+    import os
+
+    from .bybit_client import BybitClient
+    from .data import btc_close_map, fetch_bars, load_bars, save_bars, select_universe
+
+    if cache and os.path.exists(cache):
+        return load_bars(cache)
+    client = BybitClient()
+    end = int(time.time() * 1000)
+    start = end - days * 86_400_000
+    if symbols:
+        names = symbols.split(",")
+    else:
+        cfg.universe.max_symbols = top
+        names = select_universe(client.tickers(), cfg.universe)
+    btc = btc_close_map(client, cfg.strategy.interval_min, start, end)
+    data = {}
+    for s in names:
+        print(f"downloading {s} ...")
+        data[s] = fetch_bars(client, s, cfg.strategy.interval_min, start, end, btc)
+    if cache:
+        save_bars(cache, data)
+    return data
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Backtest the Crowd Squeeze strategy")
-    ap.add_argument("--synthetic", action="store_true", help="use generated data (no network)")
+    ap.add_argument("--synthetic", choices=("edge", "noedge"), help="generated data, no network (pipeline check)")
     ap.add_argument("--symbols", help="comma separated, e.g. WIFUSDT,PEPEUSDT")
     ap.add_argument("--top", type=int, default=20, help="use top-N alts by 24h turnover")
     ap.add_argument("--days", type=int, default=90)
@@ -205,35 +244,7 @@ def main() -> None:
     args = ap.parse_args()
     cfg = Config()
 
-    if args.synthetic:
-        from .synthetic import universe
-
-        data = universe()
-    else:
-        import os
-
-        from .bybit_client import BybitClient
-        from .data import btc_close_map, fetch_bars, load_bars, save_bars, select_universe
-
-        if args.cache and os.path.exists(args.cache):
-            data = load_bars(args.cache)
-        else:
-            client = BybitClient()
-            end = int(time.time() * 1000)
-            start = end - args.days * 86_400_000
-            if args.symbols:
-                symbols = args.symbols.split(",")
-            else:
-                cfg.universe.max_symbols = args.top
-                symbols = select_universe(client.tickers(), cfg.universe)
-            btc = btc_close_map(client, cfg.strategy.interval_min, start, end)
-            data = {}
-            for s in symbols:
-                print(f"downloading {s} ...")
-                data[s] = fetch_bars(client, s, cfg.strategy.interval_min, start, end, btc)
-            if args.cache:
-                save_bars(args.cache, data)
-
+    data = load_data(cfg, args.synthetic, args.symbols, args.top, args.days, args.cache)
     res = run(data, cfg, args.equity)
     if args.trades:
         for t in res.trades:
