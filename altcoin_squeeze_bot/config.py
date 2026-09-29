@@ -93,4 +93,5 @@ class Config:
     costs: CostConfig = field(default_factory=CostConfig)
     trend: TrendConfig = field(default_factory=TrendConfig)
     carry: CarryConfig = field(default_factory=CarryConfig)
+    autopilot_rule: object | None = None  # autopilot.Rule learned from all coins (see autopilot.py)
     enabled: tuple[str, ...] = ("squeeze", "trend")  # directional strategies sharing the position slots

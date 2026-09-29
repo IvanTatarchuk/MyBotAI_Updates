@@ -237,7 +237,7 @@ class Bot:
                 self.broker.on_closed_bar(sym, b)
             size = self.broker.sizes().get(sym, 0.0)
             if size <= 0:
-                log.info("%s closed by stop/trail", sym)
+                log.info("%s closed on the exchange (stop, trail or take-profit)", sym)
                 self.broker.cleanup(sym)
                 del positions[sym]
                 continue
@@ -317,18 +317,31 @@ class Bot:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Crowd Squeeze bot for Bybit altcoin perpetuals")
+    ap = argparse.ArgumentParser(description="Multi-strategy bot for Bybit altcoin perpetuals")
     ap.add_argument("--mode", choices=("paper", "testnet", "live"), default="paper")
     ap.add_argument("--state", default="squeeze_state.json")
     ap.add_argument("--equity", type=float, default=100.0, help="starting balance for paper mode")
     ap.add_argument("--once", action="store_true", help="run a single cycle and exit")
     ap.add_argument("--i-understand-the-risk", action="store_true", dest="confirm")
+    ap.add_argument("--strategies", default="squeeze,trend", help="comma separated: squeeze,trend,autopilot")
+    ap.add_argument("--interval", type=int, default=15, help="bar size in minutes (autopilot rules use 60)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     if args.mode == "live" and not args.confirm:
         raise SystemExit("Live trading uses real money. Re-run with --i-understand-the-risk after paper/testnet.")
-    bot = Bot(args.mode, Config(), args.state, args.equity)
+    cfg = Config(enabled=tuple(args.strategies.split(",")))
+    cfg.strategy.interval_min = args.interval
+    if "autopilot" in cfg.enabled:
+        from .strategies import _autopilot_rule
+
+        rule = _autopilot_rule(cfg)
+        age_days = (time.time() * 1000 - rule.learned_until) / 86_400_000
+        if age_days > 35:
+            raise SystemExit(f"autopilot rule is {age_days:.0f} days old: re-run `autopilot learn` (monthly)")
+        log.info("autopilot rule (learned %.0f days ago):\n%s", age_days, rule.describe())
+        cfg.autopilot_rule = rule
+    bot = Bot(args.mode, cfg, args.state, args.equity)
     if args.once:
         bot.cycle()
     else:

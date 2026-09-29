@@ -9,3 +9,4 @@ examples/write_probe_canary.txt
 squeeze_state.json*
 data/
 *.mid
+autopilot_rule.json

@@ -171,24 +171,68 @@ def _lifts(rows: list[tuple[float, bool]], edges: list[float]) -> tuple[list[flo
     return lifts, counts, pumps
 
 
+@dataclass
+class CoinData:
+    ts: list[int]
+    feats: list[dict[str, float] | None]
+    ups: list[bool]
+    downs: list[bool]
+
+
+@dataclass
+class Prepared:
+    """Features and move labels for every coin, computed once. Features only look back; labels look
+    `horizon` bars ahead, so a learner with a cutoff may only use rows whose label is already known."""
+
+    coins: dict[str, CoinData]
+    horizon: int
+    bar_ms: int
+    bars_per_hour: int
+    threshold: float
+    pumps: int
+    dumps: int
+
+    def rows(self, sym: str, cutoff: int | None = None):
+        """(index, features, up, down) for rows whose label is fully known before `cutoff` (ms)."""
+        c = self.coins[sym]
+        n = len(c.ts)
+        for i, f in enumerate(c.feats):
+            if f is None or i + self.horizon >= n:
+                continue
+            if cutoff is not None and c.ts[i + self.horizon] + self.bar_ms > cutoff:
+                break
+            yield i, f, c.ups[i], c.downs[i]
+
+
+def prepare(data: dict[str, list[Bar]], bars_per_hour: int = 1, horizon_h: int = 24,
+            threshold: float = 0.20) -> Prepared:
+    horizon = horizon_h * bars_per_hour
+    coins, pumps, dumps = {}, 0, 0
+    bar_ms = 3_600_000 // bars_per_hour
+    for sym, bars in data.items():
+        coins[sym] = CoinData([b.ts for b in bars], coin_features(bars, bars_per_hour),
+                              move_labels(bars, horizon, threshold), move_labels(bars, horizon, threshold, down=True))
+        pumps += len(pump_starts(bars, horizon, threshold))
+        dumps += len(pump_starts(bars, horizon, threshold, down=True))
+    return Prepared(coins, horizon, bar_ms, bars_per_hour, threshold, pumps, dumps)
+
+
+def split_coins(symbols, seed: int = 7) -> tuple[set[str], set[str]]:
+    coins = sorted(symbols)
+    random.Random(seed).shuffle(coins)
+    return set(coins[: len(coins) // 2]), set(coins[len(coins) // 2 :])
+
+
 def analyze(data: dict[str, list[Bar]], bars_per_hour: int = 1, horizon_h: int = 24, threshold: float = 0.20,
             seed: int = 7) -> tuple[list[DecileLift], dict]:
-    coins = sorted(data)
-    random.Random(seed).shuffle(coins)
-    group_a, group_b = set(coins[: len(coins) // 2]), set(coins[len(coins) // 2 :])
-    horizon = horizon_h * bars_per_hour
-    per_coin: dict[str, list[tuple[dict[str, float], bool, bool]]] = {}
-    thin: dict[str, list[tuple[dict[str, float], bool]]] = {}  # every horizon-th bar: ~independent samples
-    n_pumps = n_dumps = 0
-    for sym, bars in data.items():
-        feats = coin_features(bars, bars_per_hour)
-        ups = move_labels(bars, horizon, threshold)
-        downs = move_labels(bars, horizon, threshold, down=True)
-        n_pumps += len(pump_starts(bars, horizon, threshold))
-        n_dumps += len(pump_starts(bars, horizon, threshold, down=True))
-        last = len(bars) - horizon  # labels need `horizon` future bars
-        per_coin[sym] = [(f, ups[i], downs[i]) for i, f in enumerate(feats) if f is not None and i < last]
-        thin[sym] = [(f, ups[i]) for i, f in enumerate(feats) if f is not None and i < last and i % horizon == 0]
+    return analyze_prepared(prepare(data, bars_per_hour, horizon_h, threshold), None, seed)
+
+
+def analyze_prepared(prep: Prepared, cutoff: int | None = None, seed: int = 7) -> tuple[list[DecileLift], dict]:
+    group_a, group_b = split_coins(prep.coins, seed)
+    h = prep.horizon
+    per_coin = {s: [(f, u, d) for _, f, u, d in prep.rows(s, cutoff)] for s in prep.coins}
+    thin = {s: [(f, u) for i, f, u, _ in prep.rows(s, cutoff) if i % h == 0] for s in prep.coins}
 
     results: list[DecileLift] = []
     for feat in FEATURES:
@@ -216,8 +260,8 @@ def analyze(data: dict[str, list[Bar]], bars_per_hour: int = 1, horizon_h: int =
                 lift_b[k] / dump_b[k] if dump_b[k] > 0 else math.inf,
                 _poisson_z(pumps_b[k], rate_b * counts_b[k]),
             ))
-    meta = {"coins": len(coins), "group_a": sorted(group_a), "group_b": sorted(group_b), "pumps": n_pumps,
-            "dumps": n_dumps}
+    meta = {"coins": len(prep.coins), "group_a": sorted(group_a), "group_b": sorted(group_b), "pumps": prep.pumps,
+            "dumps": prep.dumps}
     return results, meta
 
 

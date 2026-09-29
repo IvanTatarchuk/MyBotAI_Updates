@@ -96,11 +96,15 @@ def run(
     cfg: Config,
     start_equity: float = 100.0,
     features: dict[str, list[Features | None]] | None = None,
+    autopilot_lookup: dict[str, dict] | None = None,
 ) -> Result:
     sc, rc, cc = cfg.strategy, cfg.risk, cfg.costs
     step_ms = sc.interval_min * 60_000
     index = {s: {b.ts: i for i, b in enumerate(bars)} for s, bars in data.items()}
-    detectors = {s: make_detectors(cfg, features.get(s) if features else None, s) for s in data}
+    detectors = {
+        s: make_detectors(cfg, features.get(s) if features else None, s, (autopilot_lookup or {}).get(s))
+        for s in data
+    }
     timeline = sorted({b.ts for bars in data.values() for b in bars})
 
     cash = start_equity
@@ -160,6 +164,9 @@ def run(
                 continue
             tp1_hit = bar.high >= plan.tp1_price if d == 1 else bar.low <= plan.tp1_price
             if plan.tp1_fraction > 0 and not plan.tp1_done and tp1_hit:
+                if plan.tp1_fraction >= 1:  # a single full take-profit closes the trade
+                    close(pos, pos.qty, plan.tp1_price, ts, "tp")
+                    continue
                 close(pos, pos.qty * plan.tp1_fraction, plan.tp1_price, ts, "tp1")
                 plan.tp1_done = True
             if (ts + step_ms) % FUNDING_PERIOD_MS == 0:

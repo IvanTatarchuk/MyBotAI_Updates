@@ -451,3 +451,70 @@ def test_pump_starts_counts_each_move_once_and_mirrors_dumps():
     ups = pump_starts(bars, 24, 0.20)
     assert len(ups) == 1 and min(ups) < 34
     assert pump_starts(bars, 24, 0.20, down=True) == set()
+
+
+def _ap_data(signature: bool, seed: int = 4):
+    from altcoin_squeeze_bot.prepump import synthetic_coins
+
+    return synthetic_coins(n_coins=12, n=24 * 150, signature=signature, seed=seed)
+
+
+def test_autopilot_learns_planted_pattern_and_stays_flat_without_one():
+    from altcoin_squeeze_bot.autopilot import learn_rule, walk_forward
+    from altcoin_squeeze_bot.prepump import prepare
+
+    rule = learn_rule(prepare(_ap_data(True)))
+    assert rule is not None and rule.pump_rate > 5 * rule.base_rate
+    planted = {"funding", "oi_change_4h", "oi_change_24h", "oi_vs_price_24h", "vol_ratio", "range_24h"}
+    assert {c.feature for c in rule.conditions} <= planted
+
+    cfg = Config()
+    cfg.strategy.interval_min = 60
+    periods = walk_forward(_ap_data(False), cfg)
+    assert periods and all(p.rule is None and p.r_multiples == [] for p in periods)
+
+
+def test_autopilot_rule_ignores_data_after_its_cutoff():
+    from altcoin_squeeze_bot.autopilot import learn_rule
+    from altcoin_squeeze_bot.prepump import prepare
+
+    data = _ap_data(True)
+    cutoff = next(iter(data.values()))[24 * 100].ts
+    changed = {s: bars[: 24 * 100] + _ap_data(False, seed=99)[s][24 * 100 :] for s, bars in data.items()}
+    a = learn_rule(prepare(data), cutoff=cutoff)
+    b = learn_rule(prepare(changed), cutoff=cutoff)
+    assert a is not None and a.to_json() == b.to_json()
+
+
+def test_autopilot_live_path_matches_backtest_path_and_rule_roundtrips():
+    from altcoin_squeeze_bot.autopilot import Rule, RuleDetector, learn_rule
+    from altcoin_squeeze_bot.prepump import prepare
+
+    data = _ap_data(True)
+    prep = prepare(data)
+    rule = Rule.from_json(learn_rule(prep).to_json())
+    sym, bars = next(iter(data.items()))
+    lookup = dict(zip(prep.coins[sym].ts, prep.coins[sym].feats, strict=True))
+    live, bt = RuleDetector(rule), RuleDetector(rule, lookup=lookup)
+    a = [i for i in range(len(bars)) if live.step(bars, i)]
+    b = [i for i in range(len(bars)) if bt.step(bars, i)]
+    assert a and a == b
+
+
+def test_full_take_profit_closes_trade_once():
+    from dataclasses import replace
+
+    from altcoin_squeeze_bot.autopilot import Condition, Rule
+    from altcoin_squeeze_bot.validate import measurement_config
+
+    bars = []
+    for i in range(24 * 40):
+        c = 1.0 if i < 24 * 35 else 1.3  # jump well above the take-profit
+        bars.append(Bar(i * 3_600_000, c, c * 1.001, c * 0.999, c, 1000, 1e6, 0.0, 3e4))
+    rule = Rule([Condition("hour_utc", -float("inf"), 100.0)], 0.5, 0.1, 5, 5, 50, 0)
+    cfg = replace(measurement_config(Config(enabled=("autopilot",))), autopilot_rule=rule)
+    cfg.strategy.interval_min = 60
+    res = run({"XUSDT": bars}, cfg, 1_000_000.0)
+    tps = [t for t in res.trades if t.reason == "tp"]
+    assert tps and all(abs(t.r_multiple - 15 / 8) < 0.1 for t in tps)
+    assert len({t.entry_ts for t in res.trades}) == len(res.trades)
