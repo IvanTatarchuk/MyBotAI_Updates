@@ -205,12 +205,17 @@ class Prepared:
 
 
 def prepare(data: dict[str, list[Bar]], bars_per_hour: int = 1, horizon_h: int = 24,
-            threshold: float = 0.20) -> Prepared:
+            threshold: float = 0.20, count_from: dict[str, int] | None = None) -> Prepared:
+    """`count_from` (ms per symbol) drops feature rows before that time: warm-up bars that another
+    series (e.g. the previous pseudo-coin period) already counts."""
     horizon = horizon_h * bars_per_hour
     coins, pumps, dumps = {}, 0, 0
     bar_ms = 3_600_000 // bars_per_hour
     for sym, bars in data.items():
-        coins[sym] = CoinData([b.ts for b in bars], coin_features(bars, bars_per_hour),
+        feats = coin_features(bars, bars_per_hour)
+        if count_from and sym in count_from:
+            feats = [f if b.ts >= count_from[sym] else None for f, b in zip(feats, bars, strict=True)]
+        coins[sym] = CoinData([b.ts for b in bars], feats,
                               move_labels(bars, horizon, threshold), move_labels(bars, horizon, threshold, down=True))
         pumps += len(pump_starts(bars, horizon, threshold))
         dumps += len(pump_starts(bars, horizon, threshold, down=True))

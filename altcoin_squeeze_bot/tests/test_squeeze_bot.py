@@ -525,8 +525,8 @@ def test_pseudo_coins_split_one_history_into_periods_without_double_counting():
     from altcoin_squeeze_bot.prepump import prepare
 
     bars = [Bar(i * 3_600_000, 1 + i * 1e-5, 1.01, 0.99, 1 + i * 1e-5, 100, 1, 0, 1) for i in range(24 * 400)]
-    chunks = as_pseudo_coins(bars, chunk_days=100, warmup_days=31)
+    chunks, starts = as_pseudo_coins(bars, chunk_days=100, warmup_days=31)
     assert len(chunks) == 4
-    prep = prepare(chunks)
+    prep = prepare(chunks, count_from=starts)
     counted = [c.ts[i] for c in prep.coins.values() for i, f in enumerate(c.feats) if f is not None]
     assert len(counted) == len(set(counted))  # warm-up bars are shared but never produce a feature row

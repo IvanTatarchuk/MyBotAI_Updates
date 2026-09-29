@@ -188,15 +188,18 @@ def rule_exits(rule: Rule, bars_per_hour: int = 1) -> Exits:
                  max_hold_bars=rule.horizon_h * bars_per_hour, atr_period=14)
 
 
-def as_pseudo_coins(bars: list[Bar], chunk_days: int = 182, warmup_days: int = 31) -> dict[str, list[Bar]]:
+def as_pseudo_coins(bars: list[Bar], chunk_days: int = 182,
+                    warmup_days: int = 31) -> tuple[dict[str, list[Bar]], dict[str, int]]:
     """Cut one long history into periods that act as separate "coins", so the discovery/confirmation split
-    becomes a split across different years. Each chunk carries `warmup_days` of preceding bars; features are
-    None there, so no bar is ever counted twice."""
+    becomes a split across different years. Each chunk carries `warmup_days` of preceding bars for feature
+    calculation; the returned start times must be passed to prepare(count_from=...) so those warm-up bars
+    are never counted twice."""
     import time as _time
 
     if not bars:
-        return {}
+        return {}, {}
     out: dict[str, list[Bar]] = {}
+    starts: dict[str, int] = {}
     start = bars[0].ts
     while start <= bars[-1].ts:
         end = start + chunk_days * DAY_MS
@@ -204,8 +207,9 @@ def as_pseudo_coins(bars: list[Bar], chunk_days: int = 182, warmup_days: int = 3
         if sum(1 for b in chunk if b.ts >= start) > 24 * 7:
             t = _time.gmtime(start / 1000)
             out[f"P{t.tm_year}-{t.tm_mon:02d}"] = chunk
+            starts[f"P{t.tm_year}-{t.tm_mon:02d}"] = start
         start = end
-    return out
+    return out, starts
 
 
 # ---- honest evaluation --------------------------------------------------------------------------
@@ -269,6 +273,7 @@ def main() -> None:
 
     cfg = Config()
     cfg.strategy.interval_min = 60
+    count_from: dict[str, int] | None = None
     if args.csv:
         from .data import load_binance_csv
 
@@ -276,7 +281,7 @@ def main() -> None:
         for path in args.csv.split(","):
             data.update(load_binance_csv(path))
         if len(data) == 1:
-            data = as_pseudo_coins(next(iter(data.values())))
+            data, count_from = as_pseudo_coins(next(iter(data.values())))
             print(f"single coin -> {len(data)} half-year periods used as separate coins: {', '.join(data)}")
     elif args.synthetic:
         from .prepump import synthetic_coins
@@ -302,7 +307,7 @@ def main() -> None:
                 save_bars(args.cache, data)
 
     day = lambda ms: time.strftime("%Y-%m-%d", time.gmtime(ms / 1000))  # noqa: E731
-    prep = prepare(data, 1, args.horizon, args.take_profit)  # learn to predict exactly the take-profit move
+    prep = prepare(data, 1, args.horizon, args.take_profit, count_from)  # learn exactly the take-profit move
     if args.command == "learn":
         rule = learn_rule(prep, take_profit=args.take_profit, stop_loss=args.stop_loss)
         if rule is None:
