@@ -425,4 +425,4 @@ def test_hanged_man_reverses_every_tarot_signal():
     assert pairs and all(a and b for a, b in pairs)  # same readings fire on the same bars
     for a, b in pairs:
         assert a.side != b.side and b.strategy == "hanged"
-        assert (a.stop - a.entry) == -(b.stop - b.entry)  # stop mirrored to the other side
+        assert abs((a.stop - a.entry) + (b.stop - b.entry)) < 1e-12  # stop mirrored to the other side
