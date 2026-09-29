@@ -51,14 +51,17 @@ class TrendConfig:
 
 @dataclass
 class TarotConfig:
-    """Tarot + numerology (see tarot.py). Direction comes from the cards; ATR only sizes the stop."""
+    """Chart Tarot (see tarot.py): 78 cards computed from the chart, meanings learned from history."""
 
+    horizon: int = 16  # the "future" card: forward return over 16 bars (4h)
+    min_count: int = 30  # a card must have appeared at least this often before it is trusted
+    t_min: float = 2.5  # and its past forward returns must be statistically strong
+    min_edge: float = 0.003  # and larger than ~2x round-trip costs (0.3%)
     stop_atr: float = 2.0
     atr_period: int = 14
-    tp1_r: float = 1.5
-    tp1_fraction: float = 0.5
-    trail_atr: float = 2.0
-    max_hold_bars: int = 96  # one day: tomorrow brings a new card
+    tp1_r: float = 0.0
+    tp1_fraction: float = 0.0
+    trail_atr: float = 3.0
 
 
 @dataclass

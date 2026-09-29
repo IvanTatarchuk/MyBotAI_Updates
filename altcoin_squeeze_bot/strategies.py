@@ -31,7 +31,7 @@ def exits_for(name: str, cfg: Config) -> Exits:
                      atr_period=t.atr_period)
     if name == "tarot":
         t = cfg.tarot
-        return Exits(t.tp1_r, t.tp1_fraction, t.trail_atr, t.max_hold_bars, t.atr_period)
+        return Exits(t.tp1_r, t.tp1_fraction, t.trail_atr, t.horizon, t.atr_period)  # exit when the "future" is due
     return squeeze_exits(cfg.strategy)
 
 

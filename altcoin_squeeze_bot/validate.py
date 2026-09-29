@@ -36,9 +36,9 @@ GRIDS: dict[str, dict[str, list[float]]] = {
         "trend.trail_atr": [4.0, 6.0, 8.0],
     },
     "tarot": {
+        "tarot.horizon": [8, 16, 32],
+        "tarot.t_min": [2.0, 2.5, 3.0],
         "tarot.stop_atr": [1.5, 2.0, 3.0],
-        "tarot.tp1_r": [1.0, 1.5, 2.0],
-        "tarot.max_hold_bars": [48, 96, 192],
     },
 }
 DEFAULT_GRID = GRIDS["squeeze"]
@@ -95,15 +95,18 @@ def slice_period(
     d, f = {}, {}
     for s, bars in data.items():
         ts = [b.ts for b in bars]
-        lo = max(0, bisect.bisect_left(ts, t0) - warmup_bars)
+        first = bisect.bisect_left(ts, t0)
+        lo = max(0, first - warmup_bars)
         hi = bisect.bisect_left(ts, t1)
-        if hi - lo > warmup_bars:
+        if hi > first:  # the symbol has bars inside the period itself
             d[s], f[s] = bars[lo:hi], feats[s][lo:hi]
     return d, f
 
 
 def r_multiples(data, feats, cfg: Config, t0: int, t1: int) -> list[float]:
     warmup = cfg.strategy.arm_ttl_bars + cfg.strategy.crowd_window
+    if "tarot" in cfg.enabled:
+        warmup = 10**9  # the tarot reader learns card meanings online: give it all earlier history
     d, f = slice_period(data, feats, t0, t1, warmup)
     if not d:
         return []

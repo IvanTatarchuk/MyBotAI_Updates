@@ -349,26 +349,65 @@ def test_rhythm_markov_backoff_and_midi(tmp_path):
     assert data[:4] == b"MThd" and data[14:18] == b"MTrk" and data.endswith(b"\xff\x2f\x00")
 
 
-def test_tarot_reading_is_deterministic_and_numerology_reduces():
-    from altcoin_squeeze_bot.tarot import DECK, coin_number, day_number, draw_card, reading, reduce_number
+def test_tarot_cards_are_computed_from_the_chart():
+    from altcoin_squeeze_bot.tarot import DECK, ChartReader, M, card_of
 
     assert len(DECK) == 78
-    ts = 1_759_104_000_000  # 2025-09-29 UTC
-    assert draw_card("SOLUSDT", ts) == draw_card("SOLUSDT", ts + 3_600_000)  # same card all day
-    assert reduce_number(29) == 11 and reduce_number(38) == 11 and reduce_number(123) == 6
-    assert day_number(ts) == reduce_number(2 + 0 + 2 + 5 + 0 + 9 + 2 + 9)
-    assert coin_number("SOLUSDT") == reduce_number(1 + 6 + 3)
-    direction, text = reading("SOLUSDT", ts)
-    assert direction in (-1, 0, 1) and "SOLUSDT" in text
+    base = dict(rz=0.0, tz=0.0, prev_tz=0.0, prev_rz_min=0.0, vz=1.0, vol_ratio=1.0, dz=0.0, pos=0.5, oi16=0.0,
+                f16=0.0, btc16=0.0, sd=0.001, wick=0.2, up=True, funding=0.0001, breakout_up=False, breakout_dn=False)
+    assert card_of(**{**base, "rz": -5}) == (M["The Tower"], False)
+    assert card_of(**{**base, "rz": 5, "vz": 3}) == (M["The Sun"], False)
+    assert card_of(**{**base, "prev_tz": 2.0, "tz": -0.2}) == (M["Death"], False)
+    assert card_of(**{**base, "vol_ratio": 2.5, "up": False}) == (M["Wheel of Fortune"], True)
+    assert card_of(**{**base, "dz": 0.05, "tz": 0.1}) == (M["Justice"], False)
+    # minor arcana: a funding-dominated state is a Cups card, negative funding -> reversed
+    card, rev = card_of(**{**base, "tz": 0.2, "vol_ratio": 0.75, "dz": 1.0, "funding": -0.0004})
+    assert DECK[card].endswith("of Cups") and rev
+
+    bars = generate(seed=4, n=1500)
+    cards = ChartReader().prepare(bars)
+    assert all(c is None for c in cards[: ChartReader.min_history() - 1])
+    seen = {c[0] for c in cards if c}
+    assert len(seen) >= 10 and all(0 <= c < 78 for c in seen)
 
 
-def test_tarot_trades_once_per_day_at_most():
+def test_tarot_learns_only_from_the_past():
     from altcoin_squeeze_bot.config import TarotConfig
     from altcoin_squeeze_bot.tarot import TarotDetector
 
-    bars = generate(seed=2, n=96 * 20)
-    det = TarotDetector(TarotConfig(), "SYN1USDT")
-    sigs = [s for i in range(len(bars)) if (s := det.step(bars, i))]
-    days = [s.ts // 86_400_000 for s in sigs]
-    assert len(days) == len(set(days)) <= 20
-    assert all(s.ts % 86_400_000 == 0 for s in sigs)
+    bars = generate(seed=6, n=1200)
+    det = TarotDetector(TarotConfig(), "SYN")
+    h = det.cfg.horizon
+    for i in range(700):
+        det.step(bars, i)
+    assert det._learned_upto == 699 - h  # forward returns after bar 699-h are still unknown
+    # changing the future must not change what was learned
+    total_before = sum(det.stats.n.values())
+    future = [*bars[:700], *generate(seed=99, n=500)]
+    det2 = TarotDetector(TarotConfig(), "SYN")
+    for i in range(700):
+        det2.step(future, i)
+    assert det2.stats.mean == det.stats.mean and sum(det2.stats.n.values()) == total_before
+
+
+def test_tarot_trades_only_on_strong_learned_meaning():
+    from altcoin_squeeze_bot.config import TarotConfig
+    from altcoin_squeeze_bot.tarot import TarotDetector
+
+    bars = generate(seed=2, n=3000)
+    strict = TarotDetector(TarotConfig(t_min=50.0), "SYN")
+    assert not [i for i in range(len(bars)) if strict.step(bars, i)]
+
+
+def test_slice_period_keeps_symbols_with_unbounded_warmup():
+    from altcoin_squeeze_bot.validate import slice_period
+
+    bars = generate(n=500)
+    feats = {"A": [None] * 500}
+    t0, t1 = bars[300].ts, bars[400].ts
+    d, _ = slice_period({"A": bars}, feats, t0, t1, 10**9)
+    assert len(d["A"]) == 400 and d["A"][0].ts == bars[0].ts
+    d, _ = slice_period({"A": bars}, feats, t0, t1, 16)
+    assert len(d["A"]) == 116
+    d, _ = slice_period({"A": bars}, feats, bars[-1].ts + 1, bars[-1].ts + 10, 16)
+    assert d == {}
