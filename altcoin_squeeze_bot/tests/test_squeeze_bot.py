@@ -516,5 +516,5 @@ def test_full_take_profit_closes_trade_once():
     cfg.strategy.interval_min = 60
     res = run({"XUSDT": bars}, cfg, 1_000_000.0)
     tps = [t for t in res.trades if t.reason == "tp"]
-    assert tps and all(abs(t.r_multiple - 15 / 8) < 0.1 for t in tps)
+    assert tps and all(abs(t.r_multiple - 28 / 8) < 0.1 for t in tps)  # +28% take-profit / -8% stop = 3.5R
     assert len({t.entry_ts for t in res.trades}) == len(res.trades)

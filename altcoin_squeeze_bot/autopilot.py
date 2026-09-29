@@ -7,8 +7,9 @@ Learning (learn_rule)
     over dumps and having enough independent samples. No zone -> no rule -> the autopilot does not trade.
 
 Trading (RuleDetector)
-    Buy when all conditions of the rule hold on a closed bar. Exit at +take_profit, at -stop_loss, or
-    after `horizon` bars, whichever comes first.
+    Buy when all conditions of the rule hold on a closed bar. Exit at +take_profit (default +28%), at
+    -stop_loss (default -8%), or after `horizon` bars, whichever comes first. The rule is learned to
+    predict a move of exactly the take-profit size.
 
 Honest evaluation (walk_forward)
     Re-learn every `retrain_days` using only data known at that moment, then trade the next period with
@@ -61,9 +62,9 @@ class Rule:
     lift_b: float
     samples: int  # independent (thinned) samples where the rule held
     learned_until: int  # ms: the rule saw nothing after this moment
-    threshold: float = 0.20
+    threshold: float = 0.28
     horizon_h: int = 24
-    take_profit: float = 0.15
+    take_profit: float = 0.28
     stop_loss: float = 0.08
     notes: list[str] = field(default_factory=list)
 
@@ -118,8 +119,15 @@ def _rule_stats(prep: Prepared, conds: list[Condition], symbols: set[str], cutof
     return rate, base, lift, direction, tn
 
 
+TAKE_PROFIT = 0.28
+STOP_LOSS = 0.08
+
+
 def learn_rule(prep: Prepared, cutoff: int | None = None, seed: int = 7, max_zones: int = 6,
-               min_lift: float = 2.0, min_samples: int = 15, min_dir: float = 1.5) -> Rule | None:
+               min_lift: float = 2.0, min_samples: int = 15, min_dir: float = 1.5,
+               take_profit: float = TAKE_PROFIT, stop_loss: float = STOP_LOSS) -> Rule | None:
+    """Learn the rule. `prep` should be prepared with threshold == take_profit, so the rule is trained to
+    predict exactly the move it will try to capture."""
     results, _ = analyze_prepared(prep, cutoff, seed)
     zones = repeating(results)[:max_zones]
     if not zones:
@@ -139,7 +147,7 @@ def learn_rule(prep: Prepared, cutoff: int | None = None, seed: int = 7, max_zon
         if best is None or score > best[0]:
             last_ts = max(c.ts[-1] for c in prep.coins.values())
             best = (score, Rule(conds, rate, base, lift_a, lift_b, samples, cutoff or last_ts, prep.threshold,
-                                prep.horizon // prep.bars_per_hour))
+                                prep.horizon // prep.bars_per_hour, take_profit, stop_loss))
     return best[1] if best else None
 
 
@@ -190,13 +198,14 @@ class Period:
 
 
 def walk_forward(data: dict[str, list[Bar]], cfg: Config, retrain_days: int = 30, warmup_days: int = 60,
-                 bars_per_hour: int = 1, prep: Prepared | None = None) -> list[Period]:
+                 bars_per_hour: int = 1, prep: Prepared | None = None, take_profit: float = TAKE_PROFIT,
+                 stop_loss: float = STOP_LOSS, horizon_h: int = 24) -> list[Period]:
     from dataclasses import replace
 
     from .backtest import run
     from .validate import measurement_config
 
-    prep = prep or prepare(data, bars_per_hour)
+    prep = prep or prepare(data, bars_per_hour, horizon_h, take_profit)
     t_min = min(b[0].ts for b in data.values())
     t_max = max(b[-1].ts for b in data.values()) + 1
     periods: list[Period] = []
@@ -205,7 +214,7 @@ def walk_forward(data: dict[str, list[Bar]], cfg: Config, retrain_days: int = 30
     lookups = {s: dict(zip(c.ts, c.feats, strict=True)) for s, c in prep.coins.items()}
     while t < t_max:
         end = min(t + retrain_days * DAY_MS, t_max)
-        rule = learn_rule(prep, cutoff=t)
+        rule = learn_rule(prep, cutoff=t, take_profit=take_profit, stop_loss=stop_loss)
         rs: list[float] = []
         if rule is not None:
             run_cfg = replace(base_cfg, autopilot_rule=rule)
@@ -232,6 +241,9 @@ def main() -> None:
     ap.add_argument("--cache", help="JSON cache of 1h bars (shared with prepump)")
     ap.add_argument("--retrain-days", type=int, default=30)
     ap.add_argument("--out", default="autopilot_rule.json", help="where `learn` writes the rule")
+    ap.add_argument("--take-profit", type=float, default=TAKE_PROFIT, help="e.g. 0.28 = +28%%")
+    ap.add_argument("--stop-loss", type=float, default=STOP_LOSS, help="e.g. 0.08 = -8%%")
+    ap.add_argument("--horizon", type=int, default=24, help="hours the move has to happen in (also the time exit)")
     args = ap.parse_args()
 
     cfg = Config()
@@ -260,9 +272,9 @@ def main() -> None:
                 save_bars(args.cache, data)
 
     day = lambda ms: time.strftime("%Y-%m-%d", time.gmtime(ms / 1000))  # noqa: E731
-    prep = prepare(data)
+    prep = prepare(data, 1, args.horizon, args.take_profit)  # learn to predict exactly the take-profit move
     if args.command == "learn":
-        rule = learn_rule(prep)
+        rule = learn_rule(prep, take_profit=args.take_profit, stop_loss=args.stop_loss)
         if rule is None:
             print("No repeating pre-pump pattern found -> no rule written; the autopilot stays flat.")
             return
@@ -272,7 +284,8 @@ def main() -> None:
         print(f"\nsaved to {args.out}. Run `validate` first: only trade it if the walk-forward verdict passes.")
         return
 
-    periods = walk_forward(data, cfg, args.retrain_days, prep=prep)
+    periods = walk_forward(data, cfg, args.retrain_days, prep=prep, take_profit=args.take_profit,
+                           stop_loss=args.stop_loss, horizon_h=args.horizon)
     print(f"{len(data)} coins | re-learning every {args.retrain_days} days on past data only\n")
     all_rs: list[float] = []
     for p in periods:
