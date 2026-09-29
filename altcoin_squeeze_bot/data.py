@@ -79,6 +79,41 @@ def select_universe(tickers: Iterable[dict], cfg: UniverseConfig) -> list[str]:
     return [t["symbol"] for t in rows[: cfg.max_symbols]]
 
 
+# ---- Binance public-data CSV (data.binance.vision or tools that mirror it) ----------------------
+def _to_ms(value: str) -> int:
+    value = value.strip()
+    if value.isdigit():
+        n = int(value)
+        return n // 1000 if n > 10**14 else n  # microseconds (2025+ files) -> ms
+    import datetime as dt
+
+    return int(dt.datetime.fromisoformat(value).replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
+
+
+def load_binance_csv(path: str, symbol: str | None = None) -> dict[str, list[Bar]]:
+    """Kline CSV: open_time, open, high, low, close, volume, ... Comment (#) and header lines are skipped.
+
+    Spot files carry no open interest or funding: OI is set constant and funding to 0, so features that
+    depend on them (crowding, funding filters) are simply inactive. The coin is its own
+    BTC reference when no BTC series is supplied.
+    """
+    bars: list[Bar] = []
+    with open(path) as fh:
+        for line in fh:
+            if not line.strip() or line.startswith("#"):
+                continue
+            row = line.strip().split(",")
+            try:
+                ts = _to_ms(row[0])
+                o, h, lo, c, v = (float(x) for x in row[1:6])
+            except ValueError:
+                continue  # header line
+            bars.append(Bar(ts, o, h, lo, c, v, 1.0, 0.0, c))
+    bars.sort(key=lambda b: b.ts)
+    name = symbol or os.path.basename(path).split("-")[0].split("_")[-1] or "CSV"
+    return {name: bars}
+
+
 # ---- simple JSON cache so repeated backtests don't re-download --------------------------------
 def save_bars(path: str, data: dict[str, list[Bar]]) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)

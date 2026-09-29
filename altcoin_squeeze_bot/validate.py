@@ -35,14 +35,7 @@ GRIDS: dict[str, dict[str, list[float]]] = {
         "trend.stop_atr": [3.0, 5.0, 7.0],
         "trend.trail_atr": [4.0, 6.0, 8.0],
     },
-    "tarot": {
-        "tarot.horizon": [8, 16, 32],
-        "tarot.t_min": [2.0, 2.5, 3.0],
-        "tarot.stop_atr": [1.5, 2.0, 3.0],
-    },
 }
-GRIDS["hanged"] = GRIDS["tarot"]  # same grid, every signal reversed
-GRIDS["destiny"] = GRIDS["tarot"]  # same grid, owner's numerology filter
 DEFAULT_GRID = GRIDS["squeeze"]
 
 
@@ -105,14 +98,21 @@ def slice_period(
     return d, f
 
 
+def measurement_config(cfg: Config) -> Config:
+    """Validation measures per-trade edge (R multiples). Account circuit breakers must not interfere:
+    a kill switch tripped during warm-up would silently block every later out-of-sample trade, and a
+    shrinking balance would push orders below the exchange minimum. Risk of ruin is estimated separately
+    by the Monte Carlo step, from these R multiples."""
+    return replace(cfg, risk=replace(cfg.risk, max_drawdown=1.0, daily_loss_limit=1.0))
+
+
 def r_multiples(data, feats, cfg: Config, t0: int, t1: int) -> list[float]:
+    cfg = measurement_config(cfg)
     warmup = cfg.strategy.arm_ttl_bars + cfg.strategy.crowd_window
-    if {"tarot", "hanged", "destiny"} & set(cfg.enabled):
-        warmup = 10**9  # the tarot reader learns card meanings online: give it all earlier history
     d, f = slice_period(data, feats, t0, t1, warmup)
     if not d:
         return []
-    return [t.r_multiple for t in run(d, cfg, 100.0, f).trades if t.entry_ts >= t0]
+    return [t.r_multiple for t in run(d, cfg, 1_000_000.0, f).trades if t.entry_ts >= t0]
 
 
 def score(s: Stats, min_trades: int) -> float:
@@ -229,16 +229,13 @@ def main() -> None:
     ap.add_argument("--cache")
     ap.add_argument("--folds", type=int, default=4)
     ap.add_argument("--strategies", default="squeeze,trend")
-    ap.add_argument("--birth", help="owner's birth date for destiny mode, e.g. 25.07.1988 (or BOT_OWNER_BIRTH)")
-    ap.add_argument("--name", default="", help="owner's full name for destiny mode (or BOT_OWNER_NAME)")
+    ap.add_argument("--csv", help="Binance kline CSV file(s), comma separated")
+    ap.add_argument("--interval", type=int, default=15, help="bar size of the data in minutes")
     args = ap.parse_args()
 
     cfg = Config()
-    if args.birth:
-        from .destiny import Destiny
-
-        cfg = replace(cfg, tarot=replace(cfg.tarot, owner=Destiny.from_text(args.birth, args.name)))
-    data = load_data(cfg, args.synthetic, args.symbols, args.top, args.days, args.cache)
+    cfg.strategy.interval_min = args.interval
+    data = load_data(cfg, args.synthetic, args.symbols, args.top, args.days, args.cache, args.csv)
     print("precomputing features ...")
     feats = {s: precompute_features(b, cfg.strategy) for s, b in data.items()}
 

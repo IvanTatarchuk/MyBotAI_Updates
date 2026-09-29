@@ -209,8 +209,16 @@ def _unrealized(open_pos: dict[str, Position], data, index, ts: int, prev: bool 
 
 
 def load_data(
-    cfg: Config, synthetic: str | None, symbols: str | None, top: int, days: int, cache: str | None
+    cfg: Config, synthetic: str | None, symbols: str | None, top: int, days: int, cache: str | None,
+    csv: str | None = None,
 ) -> dict[str, list[Bar]]:
+    if csv:
+        from .data import load_binance_csv
+
+        data: dict[str, list[Bar]] = {}
+        for path in csv.split(","):
+            data.update(load_binance_csv(path))
+        return data
     if synthetic:
         from .synthetic import universe
 
@@ -250,11 +258,14 @@ def main() -> None:
     ap.add_argument("--equity", type=float, default=100.0)
     ap.add_argument("--cache", help="JSON cache file for downloaded bars")
     ap.add_argument("--trades", action="store_true", help="print every trade")
-    ap.add_argument("--strategies", default="squeeze,trend", help="comma separated: squeeze,trend,tarot")
+    ap.add_argument("--strategies", default="squeeze,trend", help="comma separated: squeeze,trend")
+    ap.add_argument("--csv", help="Binance kline CSV file(s), comma separated")
+    ap.add_argument("--interval", type=int, default=15, help="bar size of the data in minutes")
     args = ap.parse_args()
     cfg = Config(enabled=tuple(args.strategies.split(",")))
+    cfg.strategy.interval_min = args.interval
 
-    data = load_data(cfg, args.synthetic, args.symbols, args.top, args.days, args.cache)
+    data = load_data(cfg, args.synthetic, args.symbols, args.top, args.days, args.cache, args.csv)
     res = run(data, cfg, args.equity)
     if args.trades:
         for t in res.trades:

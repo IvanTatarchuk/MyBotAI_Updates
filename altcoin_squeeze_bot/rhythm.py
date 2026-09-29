@@ -230,10 +230,17 @@ def main() -> None:
     ap.add_argument("--notes", type=int, default=240, help="how many recent candles to put in the MIDI")
     ap.add_argument("--order", type=int, default=4)
     ap.add_argument("--threshold-bp", type=float, default=0.0, help="trade only if |expected| > this")
+    ap.add_argument("--csv", help="Binance kline CSV instead of downloading (any timeframe)")
     args = ap.parse_args()
 
-    candles = synthetic(args.synthetic) if args.synthetic else fetch(args.symbol, args.days)
-    print(f"{len(candles)} one-minute candles")
+    if args.csv:
+        from .data import load_binance_csv
+
+        (bars,) = load_binance_csv(args.csv).values()
+        candles = [Candle(b.ts, b.open, b.high, b.low, b.close, b.volume) for b in bars]
+    else:
+        candles = synthetic(args.synthetic) if args.synthetic else fetch(args.symbol, args.days)
+    print(f"{len(candles)} candles")
     ev, scale, model = evaluate(candles, threshold_bp=args.threshold_bp, max_order=args.order)
     print("\n== Out-of-sample prediction of the next note ==")
     print(ev)

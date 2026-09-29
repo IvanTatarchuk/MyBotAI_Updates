@@ -349,56 +349,6 @@ def test_rhythm_markov_backoff_and_midi(tmp_path):
     assert data[:4] == b"MThd" and data[14:18] == b"MTrk" and data.endswith(b"\xff\x2f\x00")
 
 
-def test_tarot_cards_are_computed_from_the_chart():
-    from altcoin_squeeze_bot.tarot import DECK, ChartReader, M, card_of
-
-    assert len(DECK) == 78
-    base = dict(rz=0.0, tz=0.0, prev_tz=0.0, prev_rz_min=0.0, vz=1.0, vol_ratio=1.0, dz=0.0, pos=0.5, oi16=0.0,
-                f16=0.0, btc16=0.0, sd=0.001, wick=0.2, up=True, funding=0.0001, breakout_up=False, breakout_dn=False)
-    assert card_of(**{**base, "rz": -5}) == (M["The Tower"], False)
-    assert card_of(**{**base, "rz": 5, "vz": 3}) == (M["The Sun"], False)
-    assert card_of(**{**base, "prev_tz": 2.0, "tz": -0.2}) == (M["Death"], False)
-    assert card_of(**{**base, "vol_ratio": 2.5, "up": False}) == (M["Wheel of Fortune"], True)
-    assert card_of(**{**base, "dz": 0.05, "tz": 0.1}) == (M["Justice"], False)
-    # minor arcana: a funding-dominated state is a Cups card, negative funding -> reversed
-    card, rev = card_of(**{**base, "tz": 0.2, "vol_ratio": 0.75, "dz": 1.0, "funding": -0.0004})
-    assert DECK[card].endswith("of Cups") and rev
-
-    bars = generate(seed=4, n=1500)
-    cards = ChartReader().prepare(bars)
-    assert all(c is None for c in cards[: ChartReader.min_history() - 1])
-    seen = {c[0] for c in cards if c}
-    assert len(seen) >= 10 and all(0 <= c < 78 for c in seen)
-
-
-def test_tarot_learns_only_from_the_past():
-    from altcoin_squeeze_bot.config import TarotConfig
-    from altcoin_squeeze_bot.tarot import TarotDetector
-
-    bars = generate(seed=6, n=1200)
-    det = TarotDetector(TarotConfig(), "SYN")
-    h = det.cfg.horizon
-    for i in range(700):
-        det.step(bars, i)
-    assert det._learned_upto == 699 - h  # forward returns after bar 699-h are still unknown
-    # changing the future must not change what was learned
-    total_before = sum(det.stats.n.values())
-    future = [*bars[:700], *generate(seed=99, n=500)]
-    det2 = TarotDetector(TarotConfig(), "SYN")
-    for i in range(700):
-        det2.step(future, i)
-    assert det2.stats.mean == det.stats.mean and sum(det2.stats.n.values()) == total_before
-
-
-def test_tarot_trades_only_on_strong_learned_meaning():
-    from altcoin_squeeze_bot.config import TarotConfig
-    from altcoin_squeeze_bot.tarot import TarotDetector
-
-    bars = generate(seed=2, n=3000)
-    strict = TarotDetector(TarotConfig(t_min=50.0), "SYN")
-    assert not [i for i in range(len(bars)) if strict.step(bars, i)]
-
-
 def test_slice_period_keeps_symbols_with_unbounded_warmup():
     from altcoin_squeeze_bot.validate import slice_period
 
@@ -413,49 +363,17 @@ def test_slice_period_keeps_symbols_with_unbounded_warmup():
     assert d == {}
 
 
-def test_hanged_man_reverses_every_tarot_signal():
-    from altcoin_squeeze_bot.config import TarotConfig
-    from altcoin_squeeze_bot.tarot import TarotDetector
+def test_validation_is_not_blocked_by_kill_switch_in_warmup():
+    from altcoin_squeeze_bot.validate import r_multiples
 
-    bars = generate(seed=2, n=3000)
-    normal = TarotDetector(TarotConfig(), "SYN")
-    hanged = TarotDetector(TarotConfig(invert=True), "SYN")
-    pairs = [(normal.step(bars, i), hanged.step(bars, i)) for i in range(len(bars))]
-    pairs = [(a, b) for a, b in pairs if a or b]
-    assert pairs and all(a and b for a, b in pairs)  # same readings fire on the same bars
-    for a, b in pairs:
-        assert a.side != b.side and b.strategy == "hanged"
-        assert abs((a.stop - a.entry) + (b.stop - b.entry)) < 1e-12  # stop mirrored to the other side
+    # a crash early on trips the live kill switch, but later out-of-sample trades must still be measured
+    data = universe(n_symbols=3, n=4000)
+    cfg = Config(enabled=("squeeze",))
+    cfg.risk.max_drawdown = 0.0001  # would stop a real account after the first loss
+    t0 = data["SYN0USDT"][2500].ts
+    t1 = data["SYN0USDT"][-1].ts + 1
+    from altcoin_squeeze_bot.strategy import precompute_features
 
-
-def test_destiny_numerology_profile():
-    from altcoin_squeeze_bot.destiny import Destiny
-
-    d = Destiny.from_text("25.07.1988", "Anna Smith")  # fictional person
-    assert d.life_path == 4  # 2+5+0+7+1+9+8+8 = 40 -> 4
-    assert d.expression == 9  # ANNA 1+5+5+1 = 12, SMITH 1+4+9+2+8 = 24 -> 36 -> 9
-    assert d.birth_card == 4  # 40 > 21 -> 4 (The Emperor)
-    assert d.personal_year(2026) == 6  # 2+5+0+7 + 2+0+2+6 = 24 -> 6
-    assert d.resonant_numbers == {4, 9}
-    assert Destiny.from_text("1988-07-25") == Destiny(25, 7, 1988, "")
-    assert Destiny.from_text("10.09.1981").life_path == 11  # 1+0+0+9+1+9+8+1 = 29 -> 11, a master number is kept
-
-
-def test_destiny_mode_filters_tarot_signals_to_resonant_days():
-    from altcoin_squeeze_bot.config import TarotConfig
-    from altcoin_squeeze_bot.destiny import Destiny
-    from altcoin_squeeze_bot.tarot import TarotDetector
-
-    owner = Destiny.from_text("25.07.1988", "Anna Smith")
-    bars = generate(seed=2, n=4000)
-    plain = TarotDetector(TarotConfig(), "SYN")
-    dest = TarotDetector(TarotConfig(owner=owner), "SYN")
-    a = [s for i in range(len(bars)) if (s := plain.step(bars, i))]
-    b = [s for i in range(len(bars)) if (s := dest.step(bars, i))]
-    assert b and len(b) < len(a) and all(s.strategy == "destiny" for s in b)
-    assert {s.ts for s in b} <= {s.ts for s in a}  # a filter: never invents new signals
-    cards = dest.reader.cards
-    idx = {bar.ts: i for i, bar in enumerate(bars)}
-    for s in b:
-        c = cards[idx[s.ts]]
-        assert owner.is_resonant_day(s.ts) or c[0] == owner.birth_card
+    feats = {s: precompute_features(b, cfg.strategy) for s, b in data.items()}
+    assert r_multiples(data, feats, cfg, t0, t1)
+    assert run(data, cfg).killed
