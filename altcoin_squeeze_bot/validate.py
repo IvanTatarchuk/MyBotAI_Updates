@@ -23,11 +23,20 @@ from .backtest import load_data, run
 from .config import Config
 from .strategy import Bar, Features, precompute_features
 
-DEFAULT_GRID: dict[str, list[float]] = {
-    "z_arm": [1.5, 2.0, 2.5],
-    "oi_rise_min": [0.04, 0.06, 0.09],
-    "tp1_r": [1.0, 1.5, 2.0],
+# Keys are "<config section>.<field>". Each directional strategy is validated on its own grid.
+GRIDS: dict[str, dict[str, list[float]]] = {
+    "squeeze": {
+        "strategy.z_arm": [1.5, 2.0, 2.5],
+        "strategy.oi_rise_min": [0.04, 0.06, 0.09],
+        "strategy.tp1_r": [1.0, 1.5, 2.0],
+    },
+    "trend": {
+        "trend.donchian": [96, 192, 384],
+        "trend.stop_atr": [3.0, 5.0, 7.0],
+        "trend.trail_atr": [4.0, 6.0, 8.0],
+    },
 }
+DEFAULT_GRID = GRIDS["squeeze"]
 
 
 @dataclass
@@ -62,7 +71,12 @@ def grid_configs(base: Config, grid: dict[str, list[float]]) -> list[tuple[dict[
     out = []
     for combo in itertools.product(*(grid[k] for k in keys)):
         params = dict(zip(keys, combo, strict=True))
-        out.append((params, replace(base, strategy=replace(base.strategy, **params))))
+        cfg = base
+        for key, value in params.items():
+            section, name = key.split(".") if "." in key else ("strategy", key)
+            value = int(value) if isinstance(getattr(getattr(cfg, section), name), int) else value
+            cfg = replace(cfg, **{section: replace(getattr(cfg, section), **{name: value})})
+        out.append((params, cfg))
     return out
 
 
@@ -166,6 +180,36 @@ def verdict(oos: Stats, plateau_share: float, mc: MonteCarlo) -> list[tuple[bool
     ]
 
 
+def validate_strategy(name: str, data, feats, base: Config, folds: int) -> bool:
+    cfg = replace(base, enabled=(name,))
+    grid = GRIDS[name]
+    print(f"\n################ {name.upper()} ################")
+    print(f"== Walk-forward ({folds} folds, grid of {len(grid_configs(cfg, grid))}) ==")
+    wf = walk_forward(data, feats, cfg, grid, folds)
+    for k, (params, is_s, oos_s) in enumerate(wf.folds, 1):
+        print(f"fold {k}: {params}\n   in-sample : {is_s}\n   OUT-sample: {oos_s}")
+    oos = stats(wf.oos)
+    print(f"ALL OOS     : {oos}")
+
+    print("== Parameter plateau (full period, best 5 / worst 3) ==")
+    pl = sorted(plateau(data, feats, cfg, grid), key=lambda x: -x[1].expectancy)
+    for p, s in pl[:5] + pl[-3:]:
+        print(f"  {p}  {s}")
+    share = sum(1 for _, s in pl if s.n > 0 and s.expectancy > 0) / len(pl)
+
+    print("== Monte Carlo on OOS trades ==")
+    mc = monte_carlo(wf.oos, cfg.risk.risk_per_trade, cfg.risk.max_drawdown)
+    print(f"  median return {mc.median_return * 100:+.1f}% | bad luck (5%) {mc.p5_return * 100:+.1f}%")
+    print(f"  median max DD {mc.median_dd * 100:.1f}% | worst 5% DD {mc.p95_dd * 100:.1f}% | "
+          f"P(kill) {mc.p_kill * 100:.1f}%")
+
+    print("== Verdict ==")
+    checks = verdict(oos, share, mc)
+    for ok, text in checks:
+        print(f"  [{'PASS' if ok else 'FAIL'}] {text}")
+    return all(ok for ok, _ in checks)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Walk-forward, plateau and Monte Carlo validation")
     ap.add_argument("--synthetic", choices=("edge", "noedge"), help="generated data, no network")
@@ -174,6 +218,7 @@ def main() -> None:
     ap.add_argument("--days", type=int, default=180)
     ap.add_argument("--cache")
     ap.add_argument("--folds", type=int, default=4)
+    ap.add_argument("--strategies", default="squeeze,trend")
     args = ap.parse_args()
 
     cfg = Config()
@@ -181,33 +226,15 @@ def main() -> None:
     print("precomputing features ...")
     feats = {s: precompute_features(b, cfg.strategy) for s, b in data.items()}
 
-    print(f"\n== Walk-forward ({args.folds} folds, grid of {len(grid_configs(cfg, DEFAULT_GRID))}) ==")
-    wf = walk_forward(data, feats, cfg, DEFAULT_GRID, args.folds)
-    for k, (params, is_s, oos_s) in enumerate(wf.folds, 1):
-        print(f"fold {k}: {params}\n   in-sample : {is_s}\n   OUT-sample: {oos_s}")
-    oos = stats(wf.oos)
-    print(f"ALL OOS     : {oos}")
-
-    print("\n== Parameter plateau (full period) ==")
-    pl = plateau(data, feats, cfg, DEFAULT_GRID)
-    for p, s in sorted(pl, key=lambda x: -x[1].expectancy):
-        print(f"  {p}  {s}")
-    share = sum(1 for _, s in pl if s.n > 0 and s.expectancy > 0) / len(pl)
-
-    print("\n== Monte Carlo on OOS trades ==")
-    mc = monte_carlo(wf.oos, cfg.risk.risk_per_trade, cfg.risk.max_drawdown)
-    print(f"  median return {mc.median_return * 100:+.1f}% | bad luck (5%) {mc.p5_return * 100:+.1f}%")
-    print(f"  median max DD {mc.median_dd * 100:.1f}% | worst 5% DD {mc.p95_dd * 100:.1f}% | "
-          f"P(kill) {mc.p_kill * 100:.1f}%")
-
-    print("\n== Verdict ==")
-    checks = verdict(oos, share, mc)
-    for ok, text in checks:
-        print(f"  [{'PASS' if ok else 'FAIL'}] {text}")
-    if all(ok for ok, _ in checks):
-        print("\nAll checks passed -> next step: paper trading for 2-4 weeks, then testnet.")
+    results = {name: validate_strategy(name, data, feats, cfg, args.folds) for name in args.strategies.split(",")}
+    print("\n================ SUMMARY ================")
+    for name, ok in results.items():
+        print(f"  {name:<8} {'PASS -> may be enabled' if ok else 'FAIL -> keep disabled'}")
+    passed = [n for n, ok in results.items() if ok]
+    if passed:
+        print(f"\nNext: set Config.enabled = {tuple(passed)} and paper trade 2-4 weeks, then testnet.")
     else:
-        print("\nDO NOT TRADE REAL MONEY with this configuration.")
+        print("\nDO NOT TRADE REAL MONEY: no strategy passed on this data.")
 
 
 if __name__ == "__main__":

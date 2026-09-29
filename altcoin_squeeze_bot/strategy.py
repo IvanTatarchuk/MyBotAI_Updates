@@ -48,8 +48,9 @@ class Signal:
     entry: float  # reference price (close of the trigger bar)
     stop: float
     atr: float
-    score: float  # |z| at arming time, used to rank simultaneous signals
+    score: float  # strategy-specific strength, used to rank simultaneous signals
     ts: int
+    strategy: str = "squeeze"
 
 
 def _ret(a: float, b: float) -> float:
@@ -106,6 +107,8 @@ def precompute_features(bars: list[Bar], cfg: StrategyConfig) -> list[Features |
 class SqueezeDetector:
     """Per-symbol state machine: idle -> armed (crowd detected) -> signal (crowd breaking)."""
 
+    name = "squeeze"
+
     def __init__(self, cfg: StrategyConfig, features: list[Features | None] | None = None):
         self.cfg = cfg
         self.features = features  # optional precomputed features (see precompute_features)
@@ -159,27 +162,50 @@ class SqueezeDetector:
         return None
 
 
-def scan(bars: list[Bar], cfg: StrategyConfig) -> Signal | None:
-    """Replay the detector over history and return a signal only if it fires on the last bar.
+def replay(det, bars: list[Bar]) -> Signal | None:
+    """Replay a detector over history and return a signal only if it fires on the last bar.
 
-    Replaying makes the live bot stateless across restarts: the armed state is rebuilt from data.
+    Replaying makes the live bot stateless across restarts: detector state is rebuilt from data.
     """
-    det = SqueezeDetector(cfg)
     sig = None
     for i in range(len(bars)):
         sig = det.step(bars, i)
     return sig
 
 
+def scan(bars: list[Bar], cfg: StrategyConfig) -> Signal | None:
+    return replay(SqueezeDetector(cfg), bars)
+
+
+@dataclass
+class Exits:
+    """Per-strategy exit rules."""
+
+    tp1_r: float
+    tp1_fraction: float  # 0 -> no partial take profit; the trail is active from the start
+    trail_atr: float
+    max_hold_bars: int
+    atr_period: int
+
+
+def squeeze_exits(cfg: StrategyConfig) -> Exits:
+    return Exits(cfg.tp1_r, cfg.tp1_fraction, cfg.trail_atr, cfg.max_hold_bars, cfg.atr_period)
+
+
 @dataclass
 class TradePlan:
-    """Exit rules for an open position, shared by backtest and live bot."""
+    """State + exit rules of an open position, shared by backtest and live bot."""
 
     side: str
     entry: float
     stop: float
     initial_risk: float  # |entry - initial stop| per unit
     tp1_r: float
+    tp1_fraction: float
+    trail_atr: float
+    max_hold_bars: int
+    atr_period: int
+    strategy: str = "squeeze"
     tp1_done: bool = False
     best_price: float = 0.0  # most favourable extreme since entry, used by the trail
     bars_held: int = 0
@@ -192,20 +218,32 @@ class TradePlan:
     def tp1_price(self) -> float:
         return self.entry + self.direction * self.initial_risk * self.tp1_r
 
+    @property
+    def trailing(self) -> bool:
+        return self.tp1_done or self.tp1_fraction <= 0
 
-def new_plan(side: str, entry: float, stop: float, cfg: StrategyConfig) -> TradePlan:
-    return TradePlan(side, entry, stop, abs(entry - stop), cfg.tp1_r, best_price=entry)
+
+def new_plan(side: str, entry: float, stop: float, exits: Exits, strategy: str = "squeeze") -> TradePlan:
+    return TradePlan(
+        side, entry, stop, abs(entry - stop), exits.tp1_r, exits.tp1_fraction, exits.trail_atr,
+        exits.max_hold_bars, exits.atr_period, strategy, best_price=entry,
+    )
 
 
-def update_trail(plan: TradePlan, bar: Bar, atr_value: float, cfg: StrategyConfig) -> float:
-    """Advance plan state with a closed bar and return the (possibly tightened) stop."""
+def update_trail(plan: TradePlan, bar: Bar, atr_value: float) -> float:
+    """Advance plan state with a closed bar and return the (possibly tightened) stop.
+
+    After TP1 the stop is never worse than breakeven. Without TP1 (trend) the trail runs from entry.
+    """
     plan.bars_held += 1
     if plan.direction == 1:
         plan.best_price = max(plan.best_price, bar.high)
-        if plan.tp1_done:
-            plan.stop = max(plan.stop, plan.entry, plan.best_price - cfg.trail_atr * atr_value)
+        if plan.trailing:
+            floor = plan.entry if plan.tp1_done else plan.stop
+            plan.stop = max(plan.stop, floor, plan.best_price - plan.trail_atr * atr_value)
     else:
         plan.best_price = min(plan.best_price, bar.low)
-        if plan.tp1_done:
-            plan.stop = min(plan.stop, plan.entry, plan.best_price + cfg.trail_atr * atr_value)
+        if plan.trailing:
+            cap = plan.entry if plan.tp1_done else plan.stop
+            plan.stop = min(plan.stop, cap, plan.best_price + plan.trail_atr * atr_value)
     return plan.stop

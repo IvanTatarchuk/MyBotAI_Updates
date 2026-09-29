@@ -36,6 +36,33 @@ class StrategyConfig:
 
 
 @dataclass
+class TrendConfig:
+    """Time-series momentum / Donchian breakout: the approach with the strongest net-of-cost evidence in crypto."""
+
+    donchian: int = 192  # breakout of the previous 2-day high/low (15m bars)
+    mom_long: int = 672  # 7-day return must agree with the breakout
+    mom_short: int = 96  # 1-day return must agree too
+    atr_period: int = 96
+    stop_atr: float = 5.0
+    trail_atr: float = 6.0  # no partial TP: trends pay through the few big winners
+    max_hold_bars: int = 672 * 2
+    max_abs_funding: float = 0.0005  # skip entries where our side already pays > 0.05% per 8h
+
+
+@dataclass
+class CarryConfig:
+    """Delta-neutral funding carry: long spot + short perp, collects funding while funding is positive."""
+
+    lookback_periods: int = 9  # trailing funding average over 9 x 8h = 3 days
+    enter_rate: float = 0.0002  # enter when the trailing average >= 0.02% per 8h (~22% APR)
+    exit_rate: float = 0.00005  # leave when it decays below 0.005% per 8h
+    max_holdings: int = 3
+    capital_usage: float = 0.9  # fraction of the sleeve deployed (rest is margin buffer)
+    spot_fee: float = 0.001
+    perp_fee: float = 0.00055
+
+
+@dataclass
 class RiskConfig:
     risk_per_trade: float = 0.015  # 1.5% of equity lost if the stop is hit
     max_leverage: float = 5.0  # hard cap on notional / equity per position
@@ -64,3 +91,6 @@ class Config:
     risk: RiskConfig = field(default_factory=RiskConfig)
     universe: UniverseConfig = field(default_factory=UniverseConfig)
     costs: CostConfig = field(default_factory=CostConfig)
+    trend: TrendConfig = field(default_factory=TrendConfig)
+    carry: CarryConfig = field(default_factory=CarryConfig)
+    enabled: tuple[str, ...] = ("squeeze", "trend")  # directional strategies sharing the position slots

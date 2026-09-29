@@ -84,12 +84,12 @@ class BybitClient:
     def tickers(self) -> list[dict]:
         return self._request("GET", "/v5/market/tickers", {"category": "linear"})["list"]
 
-    def instruments(self) -> dict[str, dict]:
+    def instruments(self, category: str = "linear") -> dict[str, dict]:
         out: dict[str, dict] = {}
         cursor = None
         while True:
             res = self._request(
-                "GET", "/v5/market/instruments-info", {"category": "linear", "limit": 1000, "cursor": cursor}
+                "GET", "/v5/market/instruments-info", {"category": category, "limit": 1000, "cursor": cursor}
             )
             for it in res["list"]:
                 out[it["symbol"]] = it

@@ -7,7 +7,15 @@ from altcoin_squeeze_bot.bybit_client import sign
 from altcoin_squeeze_bot.config import Config, RiskConfig, StrategyConfig
 from altcoin_squeeze_bot.data import align, select_universe
 from altcoin_squeeze_bot.risk import RiskGuard, position_size, round_step
-from altcoin_squeeze_bot.strategy import Bar, SqueezeDetector, compute_features, new_plan, scan, update_trail
+from altcoin_squeeze_bot.strategy import (
+    Bar,
+    SqueezeDetector,
+    compute_features,
+    new_plan,
+    scan,
+    squeeze_exits,
+    update_trail,
+)
 from altcoin_squeeze_bot.synthetic import generate, universe
 
 
@@ -80,15 +88,15 @@ def test_risk_guard_daily_limit_and_kill_switch():
 
 def test_trail_only_after_tp1_and_never_loosens():
     cfg = StrategyConfig()
-    plan = new_plan("Buy", 100.0, 95.0, cfg)
+    plan = new_plan("Buy", 100.0, 95.0, squeeze_exits(cfg))
     assert plan.tp1_price == 107.5
     bar = Bar(0, 100, 110, 99, 109, 1, 1, 0, 1)
-    update_trail(plan, bar, 1.0, cfg)
+    update_trail(plan, bar, 1.0)
     assert plan.stop == 95.0  # no trailing before TP1
     plan.tp1_done = True
-    update_trail(plan, bar, 1.0, cfg)
+    update_trail(plan, bar, 1.0)
     assert plan.stop == 108.0  # 110 - 2 * ATR
-    update_trail(plan, Bar(0, 109, 109, 100, 101, 1, 1, 0, 1), 5.0, cfg)
+    update_trail(plan, Bar(0, 109, 109, 100, 101, 1, 1, 0, 1), 5.0)
     assert plan.stop == 108.0
 
 
@@ -103,7 +111,7 @@ def test_backtest_pipeline_runs_and_accounts_consistently():
 
 def test_backtest_trades_nothing_without_crowds():
     data = {"QUIETUSDT": generate(seed=5, n=1500, squeeze_every=100_000)}
-    res = run(data, Config(), 100.0)
+    res = run(data, Config(enabled=("squeeze",)), 100.0)
     assert res.trades == []
 
 
@@ -175,10 +183,10 @@ def test_validation_rejects_a_market_without_edge():
     from altcoin_squeeze_bot.strategy import precompute_features
     from altcoin_squeeze_bot.validate import DEFAULT_GRID, monte_carlo, plateau, stats, verdict, walk_forward
 
-    cfg = Config()
+    cfg = Config(enabled=("squeeze",))
     data = universe(n_symbols=4, n=4000, edge=False)
     feats = {s: precompute_features(b, cfg.strategy) for s, b in data.items()}
-    grid = {"z_arm": [1.5, 2.5], "tp1_r": DEFAULT_GRID["tp1_r"][:2]}
+    grid = {"strategy.z_arm": [1.5, 2.5], "strategy.tp1_r": DEFAULT_GRID["strategy.tp1_r"][:2]}
     wf = walk_forward(data, feats, cfg, grid, n_folds=3, min_trades=5)
     pl = plateau(data, feats, cfg, grid)
     share = sum(1 for _, s in pl if s.n > 0 and s.expectancy > 0) / len(pl)
@@ -193,3 +201,109 @@ def test_monte_carlo_and_stats_basics():
     assert s.n == 4 and abs(s.expectancy - 0.25) < 1e-12 and abs(s.profit_factor - 1.5) < 1e-12
     mc = monte_carlo([-1.0] * 40, risk=0.015, kill_dd=0.30, sims=50)
     assert mc.p_kill == 1.0 and mc.median_return < 0
+
+
+def _trend_bars(n: int = 900, drift: float = 0.0015) -> list[Bar]:
+    bars, price = [], 1.0
+    for i in range(n):
+        o = price
+        price *= 1 + (drift if i > 700 else 0.0) + (0.001 if i % 2 else -0.001)
+        bars.append(Bar(i * 900_000, o, max(o, price) * 1.001, min(o, price) * 0.999, price, 1, 1e6, 0.0001, 6e4))
+    return bars
+
+
+def test_trend_detector_breakout_long_and_funding_filter():
+    from altcoin_squeeze_bot.config import TrendConfig
+    from altcoin_squeeze_bot.trend import TrendDetector
+
+    bars = _trend_bars()
+    det = TrendDetector(TrendConfig())
+    sigs = [s for i in range(len(bars)) if (s := det.step(bars, i))]
+    assert sigs and all(s.side == "Buy" and s.strategy == "trend" and s.stop < s.entry for s in sigs)
+    assert sigs[0].ts > bars[700].ts  # nothing before the trend starts
+
+    for b in bars:
+        b.funding = 0.001  # longs already pay 0.1% per 8h -> too crowded to join
+    det = TrendDetector(TrendConfig())
+    assert not [s for i in range(len(bars)) if det.step(bars, i)]
+
+
+def test_trend_rolling_channel_matches_naive():
+    from altcoin_squeeze_bot.config import TrendConfig
+    from altcoin_squeeze_bot.trend import TrendDetector
+
+    bars = generate(seed=11, n=800)
+    det = TrendDetector(TrendConfig(donchian=50))
+    det._prepare(bars)
+    for i in (50, 123, 799):
+        assert det._hh[i] == max(b.high for b in bars[i - 50 : i])
+        assert det._ll[i] == min(b.low for b in bars[i - 50 : i])
+
+
+def test_trend_plan_trails_from_entry_without_tp1():
+    from altcoin_squeeze_bot.strategies import exits_for
+
+    plan = new_plan("Sell", 100.0, 110.0, exits_for("trend", Config()), "trend")
+    assert plan.trailing and plan.tp1_fraction == 0
+    update_trail(plan, Bar(0, 100, 101, 80, 81, 1, 1, 0, 1), 1.0)
+    assert plan.stop == 86.0  # 80 + 6 ATR, tightened immediately
+
+
+def test_scan_all_prefers_strongest_signal():
+    from altcoin_squeeze_bot.strategies import scan_all
+
+    bars = _trend_bars()
+    sig = scan_all(bars, Config(enabled=("trend",)))
+    assert sig is None or sig.strategy == "trend"
+    assert scan_all(bars, Config(enabled=("squeeze",))) is None
+
+
+def _funding_bars(rates_per_8h: list[float]) -> list[Bar]:
+    """15m bars where each 8h block (32 bars) carries the given funding rate."""
+    bars = []
+    for k, rate in enumerate(rates_per_8h):
+        for j in range(32):
+            i = k * 32 + j
+            bars.append(Bar(i * 900_000, 1, 1, 1, 1, 1, 1e6, rate, 6e4))
+    return bars
+
+
+def test_carry_collects_funding_net_of_fees():
+    from altcoin_squeeze_bot.carry import PERP_MARGIN, backtest_carry
+
+    cfg = Config()
+    cc = cfg.carry
+    res = backtest_carry({"AUSDT": _funding_bars([0.0005] * 90)}, cfg, 100.0)  # 30 days at 0.05% / 8h
+    size = 100 * cc.capital_usage / (cc.max_holdings * (1 + PERP_MARGIN))
+    entry_fee = size * (cc.spot_fee + cc.perp_fee)
+    held_periods = 90 - cc.lookback_periods  # funding collected from the period after entry
+    expected = 100 - entry_fee + size * 0.0005 * held_periods
+    assert res.switches == 1
+    assert abs(res.equity - expected) < 1e-6
+
+
+def test_carry_exits_when_funding_flips():
+    from altcoin_squeeze_bot.carry import backtest_carry
+
+    cfg = Config()
+    rates = [0.0005] * 30 + [-0.0003] * 30
+    res = backtest_carry({"AUSDT": _funding_bars(rates)}, cfg, 100.0)
+    last_curve = [e for _, e in res.curve[-10:]]
+    assert len(set(round(e, 9) for e in last_curve)) == 1  # flat: out of the position, no more payments
+    assert res.equity > 100  # the good weeks paid more than the flip cost
+
+
+def test_carry_ignores_low_funding():
+    from altcoin_squeeze_bot.carry import backtest_carry
+
+    res = backtest_carry({"AUSDT": _funding_bars([0.0001] * 60)}, Config(), 100.0)
+    assert res.switches == 0 and res.equity == 100.0
+
+
+def test_grid_configs_sets_nested_fields_with_types():
+    from altcoin_squeeze_bot.validate import grid_configs
+
+    combos = grid_configs(Config(), {"trend.donchian": [96.0], "strategy.z_arm": [2.5]})
+    (_, cfg), = combos
+    assert cfg.trend.donchian == 96 and isinstance(cfg.trend.donchian, int)
+    assert cfg.strategy.z_arm == 2.5

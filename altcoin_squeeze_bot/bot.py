@@ -25,7 +25,8 @@ from .bybit_client import BybitClient
 from .config import Config
 from .data import align, select_universe
 from .risk import RiskGuard, position_size, round_step
-from .strategy import Bar, Signal, TradePlan, atr, min_history, new_plan, scan, update_trail
+from .strategies import exits_for, required_history, scan_all
+from .strategy import Bar, Signal, TradePlan, atr, new_plan, update_trail
 
 log = logging.getLogger("squeeze")
 
@@ -200,7 +201,7 @@ class Bot:
     def _bars(self, sym: str, btc: dict[int, float], funding_now: float) -> list[Bar]:
         sc = self.cfg.strategy
         step = sc.interval_min * 60_000
-        n = min_history(sc) + 60
+        n = required_history(self.cfg) + 60
         now = int(time.time() * 1000)
         start = now - n * step
         kl = [k for k in self.data.klines(sym, sc.interval_min, start=start, limit=1000) if int(k[0]) + step <= now]
@@ -217,8 +218,9 @@ class Bot:
         step = sc.interval_min * 60_000
         now = int(time.time() * 1000)
         tickers = {t["symbol"]: t for t in self.data.tickers()}
+        history_start = now - (required_history(self.cfg) + 60) * step
         btc = {int(k[0]): float(k[4])
-               for k in self.data.klines("BTCUSDT", sc.interval_min, start=now - (min_history(sc) + 60) * step)
+               for k in self.data.klines("BTCUSDT", sc.interval_min, start=history_start, limit=1000)
                if int(k[0]) + step <= now}
 
         positions: dict[str, dict] = self.state["positions"]
@@ -239,16 +241,16 @@ class Bot:
                 self.broker.cleanup(sym)
                 del positions[sym]
                 continue
-            if not plan.tp1_done and size < p["orig_qty"] * (1 - sc.tp1_fraction / 2):
+            if plan.tp1_fraction > 0 and not plan.tp1_done and size < p["orig_qty"] * (1 - plan.tp1_fraction / 2):
                 plan.tp1_done = True
                 log.info("%s TP1 filled, stop -> breakeven", sym)
             old_stop = plan.stop
             for i, b in enumerate(bars):
                 if b.ts > p["last_bar_ts"]:
-                    update_trail(plan, b, atr(bars, i, sc.atr_period), sc)
+                    update_trail(plan, b, atr(bars, i, plan.atr_period))
             p["last_bar_ts"] = bars[-1].ts
             close_side = "Sell" if plan.side == "Buy" else "Buy"
-            if plan.bars_held >= sc.max_hold_bars:
+            if plan.bars_held >= plan.max_hold_bars:
                 log.info("%s time stop", sym)
                 self.broker.close_all(sym, close_side, size, bars[-1].close)
                 del positions[sym]
@@ -277,9 +279,9 @@ class Bot:
             except Exception as exc:  # one bad symbol must not stop the scan
                 log.warning("%s data error: %s", sym, exc)
                 continue
-            if len(bars) < min_history(sc):
+            if len(bars) < required_history(self.cfg):
                 continue
-            sig = scan(bars, sc)
+            sig = scan_all(bars, self.cfg)
             if sig:
                 signals.append((sym, sig, bars))
 
@@ -294,11 +296,12 @@ class Bot:
                 log.info("%s signal skipped: size below exchange minimum", sym)
                 continue
             fill = self.broker.open(sym, sig.side, qty, stop, rc.max_leverage, px)
-            plan = new_plan(sig.side, fill, stop, sc)
-            self.broker.place_tp(sym, "Sell" if d == 1 else "Buy", qty * sc.tp1_fraction, plan.tp1_price)
+            plan = new_plan(sig.side, fill, stop, exits_for(sig.strategy, self.cfg), sig.strategy)
+            if plan.tp1_fraction > 0:
+                self.broker.place_tp(sym, "Sell" if d == 1 else "Buy", qty * plan.tp1_fraction, plan.tp1_price)
             positions[sym] = {"plan": asdict(plan), "orig_qty": qty, "last_bar_ts": bars[-1].ts}
-            log.info("OPEN %s %s qty=%s @ %.6g stop=%.6g tp1=%.6g (z=%.1f)",
-                     sym, sig.side, qty, fill, stop, plan.tp1_price, sig.score)
+            log.info("OPEN [%s] %s %s qty=%s @ %.6g stop=%.6g (score=%.1f)",
+                     sig.strategy, sym, sig.side, qty, fill, stop, sig.score)
         self._save()
 
     def run_forever(self) -> None:

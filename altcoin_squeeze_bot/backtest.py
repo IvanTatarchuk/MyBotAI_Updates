@@ -20,7 +20,8 @@ from dataclasses import dataclass, field
 
 from .config import Config
 from .risk import RiskGuard, position_size
-from .strategy import Bar, Features, Signal, SqueezeDetector, TradePlan, atr, new_plan, update_trail
+from .strategies import exits_for, make_detectors, step_all
+from .strategy import Bar, Features, Signal, TradePlan, atr, new_plan, update_trail
 
 FUNDING_PERIOD_MS = 8 * 3_600_000
 
@@ -45,6 +46,7 @@ class Trade:
     pnl: float
     r_multiple: float
     reason: str
+    strategy: str = "squeeze"
 
 
 @dataclass
@@ -80,6 +82,10 @@ class Result:
             f"Avg R per trade  : {avg_r:+.2f}",
             f"Max drawdown     : {self.max_drawdown * 100:.1f}%",
         ]
+        for name in sorted({t.strategy for t in self.trades}):
+            ts_ = [t for t in self.trades if t.strategy == name]
+            lines.append(f"  {name:<14} : {len(ts_)} trades, avg R {sum(t.r_multiple for t in ts_) / len(ts_):+.2f}, "
+                         f"pnl {sum(t.pnl for t in ts_):+.2f}")
         if self.killed:
             lines.append("KILL SWITCH HIT  : bot would have stopped trading")
         return "\n".join(lines)
@@ -94,7 +100,7 @@ def run(
     sc, rc, cc = cfg.strategy, cfg.risk, cfg.costs
     step_ms = sc.interval_min * 60_000
     index = {s: {b.ts: i for i, b in enumerate(bars)} for s, bars in data.items()}
-    detectors = {s: SqueezeDetector(sc, features.get(s) if features else None) for s in data}
+    detectors = {s: make_detectors(cfg, features.get(s) if features else None) for s in data}
     timeline = sorted({b.ts for bars in data.values() for b in bars})
 
     cash = start_equity
@@ -114,7 +120,7 @@ def run(
             risk_usd = pos.plan.initial_risk * pos.orig_qty
             res.trades.append(
                 Trade(pos.symbol, pos.plan.side, pos.entry_ts, ts, pos.plan.entry, pos.realized,
-                      pos.realized / risk_usd if risk_usd else 0.0, reason)
+                      pos.realized / risk_usd if risk_usd else 0.0, reason, pos.plan.strategy)
             )
             del open_pos[pos.symbol]
 
@@ -135,7 +141,8 @@ def run(
             if qty <= 0:
                 continue
             fee = fill * qty * cc.taker_fee
-            open_pos[sym] = Position(sym, new_plan(sig.side, fill, stop, sc), qty, ts, realized=-fee, orig_qty=qty)
+            plan = new_plan(sig.side, fill, stop, exits_for(sig.strategy, cfg), sig.strategy)
+            open_pos[sym] = Position(sym, plan, qty, ts, realized=-fee, orig_qty=qty)
             cash -= fee
 
         # 2) manage open positions on this bar
@@ -148,18 +155,20 @@ def run(
             stop_hit = bar.low <= plan.stop if d == 1 else bar.high >= plan.stop
             if stop_hit:
                 px = min(plan.stop, bar.open) if d == 1 else max(plan.stop, bar.open)
-                close(pos, pos.qty, px * (1 - d * cc.slippage), ts, "trail" if plan.tp1_done else "stop")
+                moved = d * (plan.stop - (plan.entry - d * plan.initial_risk)) > 1e-12
+                close(pos, pos.qty, px * (1 - d * cc.slippage), ts, "trail" if moved else "stop")
                 continue
-            if not plan.tp1_done and (bar.high >= plan.tp1_price if d == 1 else bar.low <= plan.tp1_price):
-                close(pos, pos.qty * sc.tp1_fraction, plan.tp1_price, ts, "tp1")
+            tp1_hit = bar.high >= plan.tp1_price if d == 1 else bar.low <= plan.tp1_price
+            if plan.tp1_fraction > 0 and not plan.tp1_done and tp1_hit:
+                close(pos, pos.qty * plan.tp1_fraction, plan.tp1_price, ts, "tp1")
                 plan.tp1_done = True
             if (ts + step_ms) % FUNDING_PERIOD_MS == 0:
                 pay = d * pos.qty * bar.close * bar.funding
                 cash -= pay
                 pos.realized -= pay
-            f = features[sym][i] if features else None
-            update_trail(plan, bar, f.atr if f else atr(data[sym], i, sc.atr_period), sc)
-            if plan.bars_held >= sc.max_hold_bars:
+            f = features[sym][i] if features and plan.strategy == "squeeze" else None
+            update_trail(plan, bar, f.atr if f else atr(data[sym], i, plan.atr_period))
+            if plan.bars_held >= plan.max_hold_bars:
                 close(pos, pos.qty, bar.close * (1 - d * cc.slippage), ts, "time")
 
         # 3) account state + new signals
@@ -172,7 +181,7 @@ def run(
             i = index[sym].get(ts)
             if i is None:
                 continue
-            sig = detectors[sym].step(bars, i)
+            sig = step_all(detectors[sym], bars, i)
             if sig and sym not in open_pos and sym not in pending:
                 signals.append((sym, sig))
         if signals and guard.can_open(equity):
@@ -241,15 +250,17 @@ def main() -> None:
     ap.add_argument("--equity", type=float, default=100.0)
     ap.add_argument("--cache", help="JSON cache file for downloaded bars")
     ap.add_argument("--trades", action="store_true", help="print every trade")
+    ap.add_argument("--strategies", default="squeeze,trend", help="comma separated: squeeze,trend")
     args = ap.parse_args()
-    cfg = Config()
+    cfg = Config(enabled=tuple(args.strategies.split(",")))
 
     data = load_data(cfg, args.synthetic, args.symbols, args.top, args.days, args.cache)
     res = run(data, cfg, args.equity)
     if args.trades:
         for t in res.trades:
             ts = time.strftime("%Y-%m-%d %H:%M", time.gmtime(t.entry_ts / 1000))
-            print(f"{ts}  {t.symbol:<14} {t.side:<4} {t.reason:<5} pnl={t.pnl:+8.2f}  R={t.r_multiple:+.2f}")
+            print(f"{ts}  {t.strategy:<7} {t.symbol:<14} {t.side:<4} {t.reason:<5} pnl={t.pnl:+8.2f}  "
+                  f"R={t.r_multiple:+.2f}")
     print(res.summary())
 
 
