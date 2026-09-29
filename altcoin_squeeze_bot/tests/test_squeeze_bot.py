@@ -412,3 +412,42 @@ def test_pattern_measure_skips_overlapping_windows():
     c = build_ctx(bars, 60)
     r = measure(c, lambda i: True, 24, 0, len(bars), 0.0)  # every bar qualifies
     assert r.n <= (len(bars) - 24 * 7) // 24 + 1  # but only one event per 24-bar window is counted
+
+
+def test_prepump_finds_planted_signature_on_unseen_coins():
+    from altcoin_squeeze_bot.prepump import analyze, repeating, synthetic_coins
+
+    results, meta = analyze(synthetic_coins(n_coins=12, n=24 * 150, signature=True, seed=4))
+    found = {r.feature for r in repeating(results)}
+    assert {"funding", "oi_change_4h"} <= found
+    assert meta["pumps"] > 0 and meta["dumps"] > 0
+
+
+def test_prepump_finds_nothing_in_a_random_walk():
+    import random
+
+    from altcoin_squeeze_bot.prepump import analyze, repeating
+
+    rng = random.Random(9)
+    data = {}
+    for c in range(10):
+        price, bars = 1.0, []
+        for i in range(24 * 120):
+            o = price
+            price *= 1 + rng.gauss(0, 0.02)  # volatile enough for many +/-20% moves, but no structure
+            bars.append(Bar(i * 3_600_000, o, max(o, price), min(o, price), price, 1000 * (1 + rng.random()),
+                            1e6 * (1 + rng.gauss(0, 0.01)), rng.gauss(0, 0.0002), 30_000.0))
+        data[f"R{c}USDT"] = bars
+    results, meta = analyze(data)
+    assert meta["pumps"] > 50
+    assert repeating(results) == []
+
+
+def test_pump_starts_counts_each_move_once_and_mirrors_dumps():
+    from altcoin_squeeze_bot.prepump import pump_starts
+
+    closes = [1.0] * 30 + [1.0 + 0.05 * k for k in range(1, 11)] + [1.5] * 30  # +50% over 10 bars
+    bars = [Bar(i, c, c, c, c, 1, 1, 0, 1) for i, c in enumerate(closes)]
+    ups = pump_starts(bars, 24, 0.20)
+    assert len(ups) == 1 and min(ups) < 34
+    assert pump_starts(bars, 24, 0.20, down=True) == set()
