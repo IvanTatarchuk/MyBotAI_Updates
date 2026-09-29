@@ -377,3 +377,38 @@ def test_validation_is_not_blocked_by_kill_switch_in_warmup():
     feats = {s: precompute_features(b, cfg.strategy) for s, b in data.items()}
     assert r_multiples(data, feats, cfg, t0, t1)
     assert run(data, cfg).killed
+
+
+def _hourly(n: int, seed: int, hidden_hour: int | None) -> list[Bar]:
+    import random
+
+    rng = random.Random(seed)
+    bars, price = [], 100.0
+    for i in range(n):
+        ts = i * 3_600_000
+        drift = 0.004 if hidden_hour is not None and (i - 1) % 24 == hidden_hour else 0.0  # bar after that hour
+        o = price
+        price *= 1 + drift + rng.gauss(0, 0.004)
+        bars.append(Bar(ts, o, max(o, price) * 1.001, min(o, price) * 0.999, price, 100 + rng.random(), 1, 0, price))
+    return bars
+
+
+def test_pattern_miner_confirms_a_real_repeating_moment_and_nothing_in_noise():
+    from altcoin_squeeze_bot.patterns import mine, verdict
+
+    def confirmed(bars):
+        _, _, _, t_disc, rows, cost = mine(bars, 60)
+        return {(d.name, d.horizon) for d, conf in rows if verdict(d, conf, t_disc, cost, 40) == "CONFIRMED & tradable"}
+
+    found = confirmed(_hourly(24 * 400, seed=1, hidden_hour=7))
+    assert ("hour 07 UTC", 1) in found
+    assert confirmed(_hourly(24 * 400, seed=2, hidden_hour=None)) == set()
+
+
+def test_pattern_measure_skips_overlapping_windows():
+    from altcoin_squeeze_bot.patterns import build_ctx, measure
+
+    bars = _hourly(24 * 30, seed=3, hidden_hour=None)
+    c = build_ctx(bars, 60)
+    r = measure(c, lambda i: True, 24, 0, len(bars), 0.0)  # every bar qualifies
+    assert r.n <= (len(bars) - 24 * 7) // 24 + 1  # but only one event per 24-bar window is counted
