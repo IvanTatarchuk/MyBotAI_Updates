@@ -50,6 +50,18 @@ class TrendConfig:
 
 
 @dataclass
+class TarotConfig:
+    """Tarot + numerology (see tarot.py). Direction comes from the cards; ATR only sizes the stop."""
+
+    stop_atr: float = 2.0
+    atr_period: int = 14
+    tp1_r: float = 1.5
+    tp1_fraction: float = 0.5
+    trail_atr: float = 2.0
+    max_hold_bars: int = 96  # one day: tomorrow brings a new card
+
+
+@dataclass
 class CarryConfig:
     """Delta-neutral funding carry: long spot + short perp, collects funding while funding is positive."""
 
@@ -93,4 +105,5 @@ class Config:
     costs: CostConfig = field(default_factory=CostConfig)
     trend: TrendConfig = field(default_factory=TrendConfig)
     carry: CarryConfig = field(default_factory=CarryConfig)
+    tarot: TarotConfig = field(default_factory=TarotConfig)
     enabled: tuple[str, ...] = ("squeeze", "trend")  # directional strategies sharing the position slots

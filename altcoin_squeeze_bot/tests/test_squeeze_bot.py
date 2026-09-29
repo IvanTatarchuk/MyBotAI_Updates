@@ -347,3 +347,28 @@ def test_rhythm_markov_backoff_and_midi(tmp_path):
     to_midi(notes[:10], str(path), predicted=[4, 0])
     data = path.read_bytes()
     assert data[:4] == b"MThd" and data[14:18] == b"MTrk" and data.endswith(b"\xff\x2f\x00")
+
+
+def test_tarot_reading_is_deterministic_and_numerology_reduces():
+    from altcoin_squeeze_bot.tarot import DECK, coin_number, day_number, draw_card, reading, reduce_number
+
+    assert len(DECK) == 78
+    ts = 1_759_104_000_000  # 2025-09-29 UTC
+    assert draw_card("SOLUSDT", ts) == draw_card("SOLUSDT", ts + 3_600_000)  # same card all day
+    assert reduce_number(29) == 11 and reduce_number(38) == 11 and reduce_number(123) == 6
+    assert day_number(ts) == reduce_number(2 + 0 + 2 + 5 + 0 + 9 + 2 + 9)
+    assert coin_number("SOLUSDT") == reduce_number(1 + 6 + 3)
+    direction, text = reading("SOLUSDT", ts)
+    assert direction in (-1, 0, 1) and "SOLUSDT" in text
+
+
+def test_tarot_trades_once_per_day_at_most():
+    from altcoin_squeeze_bot.config import TarotConfig
+    from altcoin_squeeze_bot.tarot import TarotDetector
+
+    bars = generate(seed=2, n=96 * 20)
+    det = TarotDetector(TarotConfig(), "SYN1USDT")
+    sigs = [s for i in range(len(bars)) if (s := det.step(bars, i))]
+    days = [s.ts // 86_400_000 for s in sigs]
+    assert len(days) == len(set(days)) <= 20
+    assert all(s.ts % 86_400_000 == 0 for s in sigs)

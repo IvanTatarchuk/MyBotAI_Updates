@@ -281,7 +281,7 @@ class Bot:
                 continue
             if len(bars) < required_history(self.cfg):
                 continue
-            sig = scan_all(bars, self.cfg)
+            sig = scan_all(bars, self.cfg, sym)
             if sig:
                 signals.append((sym, sig, bars))
 

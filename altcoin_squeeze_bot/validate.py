@@ -35,6 +35,11 @@ GRIDS: dict[str, dict[str, list[float]]] = {
         "trend.stop_atr": [3.0, 5.0, 7.0],
         "trend.trail_atr": [4.0, 6.0, 8.0],
     },
+    "tarot": {
+        "tarot.stop_atr": [1.5, 2.0, 3.0],
+        "tarot.tp1_r": [1.0, 1.5, 2.0],
+        "tarot.max_hold_bars": [48, 96, 192],
+    },
 }
 DEFAULT_GRID = GRIDS["squeeze"]
 

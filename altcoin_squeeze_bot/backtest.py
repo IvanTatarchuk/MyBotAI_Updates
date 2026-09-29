@@ -100,7 +100,7 @@ def run(
     sc, rc, cc = cfg.strategy, cfg.risk, cfg.costs
     step_ms = sc.interval_min * 60_000
     index = {s: {b.ts: i for i, b in enumerate(bars)} for s, bars in data.items()}
-    detectors = {s: make_detectors(cfg, features.get(s) if features else None) for s in data}
+    detectors = {s: make_detectors(cfg, features.get(s) if features else None, s) for s in data}
     timeline = sorted({b.ts for bars in data.values() for b in bars})
 
     cash = start_equity
@@ -250,7 +250,7 @@ def main() -> None:
     ap.add_argument("--equity", type=float, default=100.0)
     ap.add_argument("--cache", help="JSON cache file for downloaded bars")
     ap.add_argument("--trades", action="store_true", help="print every trade")
-    ap.add_argument("--strategies", default="squeeze,trend", help="comma separated: squeeze,trend")
+    ap.add_argument("--strategies", default="squeeze,trend", help="comma separated: squeeze,trend,tarot")
     args = ap.parse_args()
     cfg = Config(enabled=tuple(args.strategies.split(",")))
 
