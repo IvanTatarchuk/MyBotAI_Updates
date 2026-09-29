@@ -41,6 +41,7 @@ GRIDS: dict[str, dict[str, list[float]]] = {
         "tarot.stop_atr": [1.5, 2.0, 3.0],
     },
 }
+GRIDS["hanged"] = GRIDS["tarot"]  # same grid, every signal reversed
 DEFAULT_GRID = GRIDS["squeeze"]
 
 
@@ -105,7 +106,7 @@ def slice_period(
 
 def r_multiples(data, feats, cfg: Config, t0: int, t1: int) -> list[float]:
     warmup = cfg.strategy.arm_ttl_bars + cfg.strategy.crowd_window
-    if "tarot" in cfg.enabled:
+    if "tarot" in cfg.enabled or "hanged" in cfg.enabled:
         warmup = 10**9  # the tarot reader learns card meanings online: give it all earlier history
     d, f = slice_period(data, feats, t0, t1, warmup)
     if not d:

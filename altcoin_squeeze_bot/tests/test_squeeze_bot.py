@@ -411,3 +411,18 @@ def test_slice_period_keeps_symbols_with_unbounded_warmup():
     assert len(d["A"]) == 116
     d, _ = slice_period({"A": bars}, feats, bars[-1].ts + 1, bars[-1].ts + 10, 16)
     assert d == {}
+
+
+def test_hanged_man_reverses_every_tarot_signal():
+    from altcoin_squeeze_bot.config import TarotConfig
+    from altcoin_squeeze_bot.tarot import TarotDetector
+
+    bars = generate(seed=2, n=3000)
+    normal = TarotDetector(TarotConfig(), "SYN")
+    hanged = TarotDetector(TarotConfig(invert=True), "SYN")
+    pairs = [(normal.step(bars, i), hanged.step(bars, i)) for i in range(len(bars))]
+    pairs = [(a, b) for a, b in pairs if a or b]
+    assert pairs and all(a and b for a, b in pairs)  # same readings fire on the same bars
+    for a, b in pairs:
+        assert a.side != b.side and b.strategy == "hanged"
+        assert (a.stop - a.entry) == -(b.stop - b.entry)  # stop mirrored to the other side

@@ -234,10 +234,9 @@ class CardStats:
 class TarotDetector:
     """Reads the spread on every bar; trades when the cards' learned meaning is strong and beats costs."""
 
-    name = "tarot"
-
     def __init__(self, cfg: TarotConfig, symbol: str = ""):
         self.cfg, self.symbol = cfg, symbol
+        self.name = "hanged" if cfg.invert else "tarot"
         self.reader = ChartReader()
         self.stats = CardStats()
         self._learned_upto = -1  # last bar index whose forward return has been recorded
@@ -290,6 +289,8 @@ class TarotDetector:
         if a <= 0:
             return None
         d = 1 if mean > 0 else -1
+        if cfg.invert:  # The Hanged Man: the same reading, acted on upside down
+            d = -d
         bar = bars[i]
         return Signal("Buy" if d > 0 else "Sell", bar.close, bar.close - d * cfg.stop_atr * a, a, abs(t), bar.ts,
                       self.name)

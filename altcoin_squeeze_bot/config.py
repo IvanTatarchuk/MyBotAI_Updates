@@ -62,6 +62,7 @@ class TarotConfig:
     tp1_r: float = 0.0
     tp1_fraction: float = 0.0
     trail_atr: float = 3.0
+    invert: bool = False  # The Hanged Man (Major Arcana XII): see the world upside down -> trade every signal reversed
 
 
 @dataclass
