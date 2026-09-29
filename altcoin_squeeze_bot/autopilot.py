@@ -188,6 +188,26 @@ def rule_exits(rule: Rule, bars_per_hour: int = 1) -> Exits:
                  max_hold_bars=rule.horizon_h * bars_per_hour, atr_period=14)
 
 
+def as_pseudo_coins(bars: list[Bar], chunk_days: int = 182, warmup_days: int = 31) -> dict[str, list[Bar]]:
+    """Cut one long history into periods that act as separate "coins", so the discovery/confirmation split
+    becomes a split across different years. Each chunk carries `warmup_days` of preceding bars; features are
+    None there, so no bar is ever counted twice."""
+    import time as _time
+
+    if not bars:
+        return {}
+    out: dict[str, list[Bar]] = {}
+    start = bars[0].ts
+    while start <= bars[-1].ts:
+        end = start + chunk_days * DAY_MS
+        chunk = [b for b in bars if start - warmup_days * DAY_MS <= b.ts < end]
+        if sum(1 for b in chunk if b.ts >= start) > 24 * 7:
+            t = _time.gmtime(start / 1000)
+            out[f"P{t.tm_year}-{t.tm_mon:02d}"] = chunk
+        start = end
+    return out
+
+
 # ---- honest evaluation --------------------------------------------------------------------------
 @dataclass
 class Period:
@@ -239,6 +259,7 @@ def main() -> None:
     ap.add_argument("--top", type=int, default=40)
     ap.add_argument("--days", type=int, default=180)
     ap.add_argument("--cache", help="JSON cache of 1h bars (shared with prepump)")
+    ap.add_argument("--csv", help="Binance 1h kline CSV; a single coin is cut into half-year pseudo-coins")
     ap.add_argument("--retrain-days", type=int, default=30)
     ap.add_argument("--out", default="autopilot_rule.json", help="where `learn` writes the rule")
     ap.add_argument("--take-profit", type=float, default=TAKE_PROFIT, help="e.g. 0.28 = +28%%")
@@ -248,7 +269,16 @@ def main() -> None:
 
     cfg = Config()
     cfg.strategy.interval_min = 60
-    if args.synthetic:
+    if args.csv:
+        from .data import load_binance_csv
+
+        data = {}
+        for path in args.csv.split(","):
+            data.update(load_binance_csv(path))
+        if len(data) == 1:
+            data = as_pseudo_coins(next(iter(data.values())))
+            print(f"single coin -> {len(data)} half-year periods used as separate coins: {', '.join(data)}")
+    elif args.synthetic:
         from .prepump import synthetic_coins
 
         data = synthetic_coins(signature=args.synthetic == "signature")
