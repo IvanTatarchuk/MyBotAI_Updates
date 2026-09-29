@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+from dataclasses import replace
 
 from altcoin_squeeze_bot.backtest import run
 from altcoin_squeeze_bot.bot import PaperBroker, fmt, fmt_price
@@ -530,3 +531,47 @@ def test_pseudo_coins_split_one_history_into_periods_without_double_counting():
     prep = prepare(chunks, count_from=starts)
     counted = [c.ts[i] for c in prep.coins.values() for i, f in enumerate(c.feats) if f is not None]
     assert len(counted) == len(set(counted))  # warm-up bars are shared but never produce a feature row
+
+
+def test_fixed_leverage_sizes_whole_account_and_liquidates_before_a_far_stop():
+    from altcoin_squeeze_bot.backtest import Position, run
+    from altcoin_squeeze_bot.config import RiskConfig
+    from altcoin_squeeze_bot.risk import position_size
+
+    rc = RiskConfig(fixed_leverage=10)
+    assert abs(position_size(100, 50.0, 40.0, rc) * 50.0 - 1000) < 1e-9  # $100 x10 = $1000 notional, stop ignored
+
+    # a long whose stop sits below the x10 liquidation price must be liquidated first
+    from altcoin_squeeze_bot.autopilot import Condition, Rule
+    from altcoin_squeeze_bot.validate import measurement_config
+
+    bars = [Bar(i * 3_600_000, 1.0, 1.001, 0.999, 1.0, 1000, 1e6, 0.0, 3e4) for i in range(24 * 32)]
+    bars.append(Bar(len(bars) * 3_600_000, 1.0, 1.0, 0.85, 0.86, 1000, 1e6, 0.0, 3e4))  # -15% crash bar
+    rule = Rule([Condition("hour_utc", -float("inf"), 100.0)], 0.5, 0.1, 5, 5, 50, 0, stop_loss=0.12)
+    cfg = replace(measurement_config(Config(enabled=("autopilot",))), autopilot_rule=rule)
+    cfg.strategy.interval_min = 60
+    cfg.risk.fixed_leverage = 10
+    cfg.risk.max_positions = 1
+    res = run({"XUSDT": bars}, cfg, 100.0)
+    liq = [t for t in res.trades if t.reason == "LIQUIDATED"]
+    assert len(liq) == 1
+    before = res.equity - liq[0].pnl  # account value when the liquidated trade was open
+    assert -liq[0].pnl / before > 0.9  # ~95% of the account gone (1/10 - 0.5% maintenance margin, x10)
+    assert "liq_price" in Position.__dataclass_fields__
+
+
+def test_trend_long_only_never_shorts():
+    from altcoin_squeeze_bot.config import TrendConfig
+    from altcoin_squeeze_bot.trend import TrendDetector
+
+    bars = [Bar(i * 900_000, 1.0, 1.0, 1.0, 1.0, 1, 1, 0.0, 1) for i in range(0)]
+    price = 1.0
+    for i in range(900):  # a long, clean downtrend
+        o = price
+        price *= 0.997 if i > 700 else 1.0 + (0.001 if i % 2 else -0.001)
+        bars.append(Bar(i * 900_000, o, max(o, price) * 1.001, min(o, price) * 0.999, price, 1, 1e6, 0.0, 6e4))
+    both = [s for i in range(len(bars)) if (s := TrendDetector(TrendConfig()).step(bars, i))]
+    det = TrendDetector(TrendConfig(long_only=True))
+    longs = [s for i in range(len(bars)) if (s := det.step(bars, i))]
+    assert any(s.side == "Sell" for s in both)  # the plain detector shorts this downtrend
+    assert all(s.side == "Buy" for s in longs)

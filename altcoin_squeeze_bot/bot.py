@@ -295,7 +295,7 @@ class Bot:
             if qty <= 0:
                 log.info("%s signal skipped: size below exchange minimum", sym)
                 continue
-            fill = self.broker.open(sym, sig.side, qty, stop, rc.max_leverage, px)
+            fill = self.broker.open(sym, sig.side, qty, stop, rc.fixed_leverage or rc.max_leverage, px)
             plan = new_plan(sig.side, fill, stop, exits_for(sig.strategy, self.cfg), sig.strategy)
             if plan.tp1_fraction > 0:
                 self.broker.place_tp(sym, "Sell" if d == 1 else "Buy", qty * plan.tp1_fraction, plan.tp1_price)
@@ -325,6 +325,9 @@ def main() -> None:
     ap.add_argument("--i-understand-the-risk", action="store_true", dest="confirm")
     ap.add_argument("--strategies", default="squeeze,trend", help="comma separated: squeeze,trend,autopilot")
     ap.add_argument("--interval", type=int, default=15, help="bar size in minutes (autopilot rules use 60)")
+    ap.add_argument("--risk", type=float, help="risk per trade, e.g. 0.0075")
+    ap.add_argument("--fixed-leverage", type=float, default=0.0, help="use equity x N as notional on every trade")
+    ap.add_argument("--long-only", action="store_true", help="trend: longs only")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -332,6 +335,10 @@ def main() -> None:
         raise SystemExit("Live trading uses real money. Re-run with --i-understand-the-risk after paper/testnet.")
     cfg = Config(enabled=tuple(args.strategies.split(",")))
     cfg.strategy.interval_min = args.interval
+    cfg.trend.long_only = args.long_only
+    cfg.risk.fixed_leverage = args.fixed_leverage
+    if args.risk:
+        cfg.risk.risk_per_trade = args.risk
     if "autopilot" in cfg.enabled:
         from .strategies import _autopilot_rule
 

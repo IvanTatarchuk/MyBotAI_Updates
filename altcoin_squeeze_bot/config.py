@@ -47,6 +47,7 @@ class TrendConfig:
     trail_atr: float = 6.0  # no partial TP: trends pay through the few big winners
     max_hold_bars: int = 672 * 2
     max_abs_funding: float = 0.0005  # skip entries where our side already pays > 0.05% per 8h
+    long_only: bool = False  # on BTC 2017-2024 the edge was in longs; shorts were ~0R
 
 
 @dataclass
@@ -70,6 +71,10 @@ class RiskConfig:
     daily_loss_limit: float = 0.05  # stop opening trades for the UTC day after -5%
     max_drawdown: float = 0.30  # kill switch: stop the bot after -30% from peak
     min_notional: float = 5.0  # Bybit minimum order value in USDT
+    # 0 = size from the stop (risk_per_trade). >0 = every trade uses equity x fixed_leverage as notional,
+    # regardless of the stop (much riskier: a stop or liquidation can take a large part of the account).
+    fixed_leverage: float = 0.0
+    maintenance_margin: float = 0.005  # used to place the liquidation price in backtests
 
 
 @dataclass

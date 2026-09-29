@@ -32,8 +32,11 @@ def position_size(
     dist = abs(entry - stop)
     if equity <= 0 or entry <= 0 or dist <= 0:
         return 0.0
-    qty = equity * cfg.risk_per_trade / dist
-    qty = min(qty, equity * cfg.max_leverage / entry)
+    if cfg.fixed_leverage > 0:
+        qty = equity * cfg.fixed_leverage / entry  # whole account at a fixed leverage
+    else:
+        qty = equity * cfg.risk_per_trade / dist
+        qty = min(qty, equity * cfg.max_leverage / entry)
     qty = round_step(qty, qty_step)
     if qty <= 0 or qty < min_qty or qty * entry < cfg.min_notional:
         return 0.0

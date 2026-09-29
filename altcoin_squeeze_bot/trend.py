@@ -78,6 +78,8 @@ class TrendDetector:
 
         if bar.close > self._hh[i] and ret_long > 0 and ret_short > 0 and bar.funding <= cfg.max_abs_funding:
             return Signal("Buy", bar.close, bar.close - cfg.stop_atr * a, a, score, bar.ts, self.name)
+        if cfg.long_only:
+            return None
         if bar.close < self._ll[i] and ret_long < 0 and ret_short < 0 and bar.funding >= -cfg.max_abs_funding:
             return Signal("Sell", bar.close, bar.close + cfg.stop_atr * a, a, score, bar.ts, self.name)
         return None

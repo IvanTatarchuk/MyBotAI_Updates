@@ -34,6 +34,7 @@ class Position:
     entry_ts: int
     realized: float = 0.0  # pnl booked so far (after fees)
     orig_qty: float = 0.0
+    liq_price: float = 0.0  # exchange liquidation price (fixed-leverage mode), 0 = not modelled
 
 
 @dataclass
@@ -146,7 +147,10 @@ def run(
                 continue
             fee = fill * qty * cc.taker_fee
             plan = new_plan(sig.side, fill, stop, exits_for(sig.strategy, cfg), sig.strategy)
-            open_pos[sym] = Position(sym, plan, qty, ts, realized=-fee, orig_qty=qty)
+            liq = 0.0
+            if rc.fixed_leverage > 0:  # isolated margin = notional / leverage
+                liq = fill * (1 - d * (1 / rc.fixed_leverage - rc.maintenance_margin))
+            open_pos[sym] = Position(sym, plan, qty, ts, realized=-fee, orig_qty=qty, liq_price=liq)
             cash -= fee
 
         # 2) manage open positions on this bar
@@ -156,6 +160,11 @@ def run(
                 continue
             bar, plan = data[sym][i], pos.plan
             d = plan.direction
+            if pos.liq_price and (d * (pos.liq_price - plan.stop) > 0):  # liquidation comes before the stop
+                if (bar.low <= pos.liq_price) if d == 1 else (bar.high >= pos.liq_price):
+                    px = min(pos.liq_price, bar.open) if d == 1 else max(pos.liq_price, bar.open)
+                    close(pos, pos.qty, px, ts, "LIQUIDATED")
+                    continue
             stop_hit = bar.low <= plan.stop if d == 1 else bar.high >= plan.stop
             if stop_hit:
                 px = min(plan.stop, bar.open) if d == 1 else max(plan.stop, bar.open)
@@ -268,9 +277,16 @@ def main() -> None:
     ap.add_argument("--strategies", default="squeeze,trend", help="comma separated: squeeze,trend")
     ap.add_argument("--csv", help="Binance kline CSV file(s), comma separated")
     ap.add_argument("--interval", type=int, default=15, help="bar size of the data in minutes")
+    ap.add_argument("--risk", type=float, help="risk per trade, e.g. 0.0075")
+    ap.add_argument("--fixed-leverage", type=float, default=0.0, help="use equity x N as notional on every trade")
+    ap.add_argument("--long-only", action="store_true", help="trend: longs only")
     args = ap.parse_args()
     cfg = Config(enabled=tuple(args.strategies.split(",")))
     cfg.strategy.interval_min = args.interval
+    cfg.trend.long_only = args.long_only
+    cfg.risk.fixed_leverage = args.fixed_leverage
+    if args.risk:
+        cfg.risk.risk_per_trade = args.risk
 
     data = load_data(cfg, args.synthetic, args.symbols, args.top, args.days, args.cache, args.csv)
     res = run(data, cfg, args.equity)
