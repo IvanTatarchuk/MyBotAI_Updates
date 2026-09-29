@@ -6,7 +6,7 @@ from .config import Config
 from .strategy import Bar, Exits, Features, Signal, SqueezeDetector, min_history, replay, squeeze_exits
 from .trend import TrendDetector
 
-NAMES = ("squeeze", "trend", "autopilot")
+NAMES = ("squeeze", "trend", "autopilot", "impulse")
 
 
 def _autopilot_rule(cfg: Config):
@@ -31,6 +31,10 @@ def make_detectors(cfg: Config, features: list[Features | None] | None = None, s
             dets.append(SqueezeDetector(cfg.strategy, features))
         elif name == "trend":
             dets.append(TrendDetector(cfg.trend))
+        elif name == "impulse":
+            from .impulse import ImpulseDetector
+
+            dets.append(ImpulseDetector(cfg.impulse))
         elif name == "autopilot":
             from .autopilot import RuleDetector
 
@@ -41,6 +45,10 @@ def make_detectors(cfg: Config, features: list[Features | None] | None = None, s
 
 
 def exits_for(name: str, cfg: Config) -> Exits:
+    if name == "impulse":
+        from .impulse import impulse_exits
+
+        return impulse_exits(cfg.impulse)
     if name == "autopilot":
         from .autopilot import rule_exits
 
@@ -56,6 +64,8 @@ def required_history(cfg: Config) -> int:
     need = [min_history(cfg.strategy)] if "squeeze" in cfg.enabled else []
     if "trend" in cfg.enabled:
         need.append(TrendDetector(cfg.trend).min_history)
+    if "impulse" in cfg.enabled:
+        need.append(max(cfg.impulse.window, cfg.impulse.breakout) + 2)
     if "autopilot" in cfg.enabled:
         need.append(31 * 24 * max(1, 60 // cfg.strategy.interval_min))
     return max(need)

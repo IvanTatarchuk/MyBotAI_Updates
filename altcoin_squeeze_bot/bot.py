@@ -326,7 +326,8 @@ def main() -> None:
     ap.add_argument("--strategies", default="squeeze,trend", help="comma separated: squeeze,trend,autopilot")
     ap.add_argument("--interval", type=int, default=15, help="bar size in minutes (autopilot rules use 60)")
     ap.add_argument("--risk", type=float, help="risk per trade, e.g. 0.0075")
-    ap.add_argument("--fixed-leverage", type=float, default=0.0, help="use equity x N as notional on every trade")
+    ap.add_argument("--fixed-leverage", type=float, default=0.0, help="notional = equity x margin x N")
+    ap.add_argument("--margin", type=float, default=1.0, help="with --fixed-leverage: margin per trade, 0.1 = 10%%")
     ap.add_argument("--long-only", action="store_true", help="trend: longs only")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -337,6 +338,7 @@ def main() -> None:
     cfg.strategy.interval_min = args.interval
     cfg.trend.long_only = args.long_only
     cfg.risk.fixed_leverage = args.fixed_leverage
+    cfg.risk.margin_fraction = args.margin
     if args.risk:
         cfg.risk.risk_per_trade = args.risk
     if "autopilot" in cfg.enabled:

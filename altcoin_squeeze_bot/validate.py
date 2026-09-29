@@ -36,6 +36,11 @@ GRIDS: dict[str, dict[str, list[float]]] = {
         "trend.trail_atr": [4.0, 6.0, 8.0],
     },
 }
+GRIDS["impulse"] = {
+    "impulse.z_min": [2.5, 3.0, 4.0],
+    "impulse.tp_r": [1.5, 2.0, 3.0],
+    "impulse.max_hold_bars": [12, 24, 48],
+}
 DEFAULT_GRID = GRIDS["squeeze"]
 
 

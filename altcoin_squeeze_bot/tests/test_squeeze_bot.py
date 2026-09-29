@@ -575,3 +575,29 @@ def test_trend_long_only_never_shorts():
     longs = [s for i in range(len(bars)) if (s := det.step(bars, i))]
     assert any(s.side == "Sell" for s in both)  # the plain detector shorts this downtrend
     assert all(s.side == "Buy" for s in longs)
+
+
+def test_impulse_fires_on_volume_breakout_bar_only_and_margin_sizing():
+    import random
+
+    from altcoin_squeeze_bot.config import ImpulseConfig, RiskConfig
+    from altcoin_squeeze_bot.impulse import ImpulseDetector
+    from altcoin_squeeze_bot.risk import position_size
+
+    rng = random.Random(5)
+    bars, price = [], 100.0
+    for i in range(300):
+        o = price
+        price *= 1 + rng.gauss(0, 0.003)
+        bars.append(Bar(i * 3_600_000, o, max(o, price) * 1.001, min(o, price) * 0.999, price, 1000, 1, 0, 1))
+    o = price
+    price *= 1.04  # +4% on 5x volume, closing at the high
+    bars.append(Bar(300 * 3_600_000, o, price, o * 0.999, price, 5000, 1, 0, 1))
+    det = ImpulseDetector(ImpulseConfig())
+    sigs = [(i, s) for i in range(len(bars)) if (s := det.step(bars, i))]
+    assert [i for i, _ in sigs] == [300]
+    s = sigs[0][1]
+    assert s.side == "Buy" and s.stop <= bars[300].low
+
+    rc = RiskConfig(fixed_leverage=10, margin_fraction=0.1)
+    assert abs(position_size(100, 50.0, 49.0, rc) * 50.0 - 100) < 1e-9  # 10% margin x10 = 100% notional

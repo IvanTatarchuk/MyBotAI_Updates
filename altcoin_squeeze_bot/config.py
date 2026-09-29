@@ -51,6 +51,20 @@ class TrendConfig:
 
 
 @dataclass
+class ImpulseConfig:
+    """Momentum-burst entries (see impulse.py). Bars are those of the data (1h for the BTC CSV)."""
+
+    window: int = 96  # bars for the return / volume / ATR baseline
+    z_min: float = 3.0  # impulse bar return, in standard deviations
+    volume_mult: float = 2.0
+    close_pos: float = 0.25  # close within the top 25% of the bar
+    breakout: int = 48  # close above the previous 48-bar high
+    min_stop_atr: float = 0.5  # stop at the impulse bar low, but at least 0.5 ATR away
+    tp_r: float = 2.0
+    max_hold_bars: int = 24
+
+
+@dataclass
 class CarryConfig:
     """Delta-neutral funding carry: long spot + short perp, collects funding while funding is positive."""
 
@@ -74,6 +88,7 @@ class RiskConfig:
     # 0 = size from the stop (risk_per_trade). >0 = every trade uses equity x fixed_leverage as notional,
     # regardless of the stop (much riskier: a stop or liquidation can take a large part of the account).
     fixed_leverage: float = 0.0
+    margin_fraction: float = 1.0  # with fixed_leverage: margin per trade as a share of equity (0.1 = 10%)
     maintenance_margin: float = 0.005  # used to place the liquidation price in backtests
 
 
@@ -98,5 +113,6 @@ class Config:
     costs: CostConfig = field(default_factory=CostConfig)
     trend: TrendConfig = field(default_factory=TrendConfig)
     carry: CarryConfig = field(default_factory=CarryConfig)
+    impulse: ImpulseConfig = field(default_factory=ImpulseConfig)
     autopilot_rule: object | None = None  # autopilot.Rule learned from all coins (see autopilot.py)
     enabled: tuple[str, ...] = ("squeeze", "trend")  # directional strategies sharing the position slots

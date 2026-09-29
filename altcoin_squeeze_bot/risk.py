@@ -33,7 +33,7 @@ def position_size(
     if equity <= 0 or entry <= 0 or dist <= 0:
         return 0.0
     if cfg.fixed_leverage > 0:
-        qty = equity * cfg.fixed_leverage / entry  # whole account at a fixed leverage
+        qty = equity * cfg.margin_fraction * cfg.fixed_leverage / entry  # margin share x leverage
     else:
         qty = equity * cfg.risk_per_trade / dist
         qty = min(qty, equity * cfg.max_leverage / entry)
