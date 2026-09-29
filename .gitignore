@@ -8,3 +8,4 @@ dist/
 examples/write_probe_canary.txt
 squeeze_state.json*
 data/
+*.mid

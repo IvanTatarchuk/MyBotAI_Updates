@@ -307,3 +307,43 @@ def test_grid_configs_sets_nested_fields_with_types():
     (_, cfg), = combos
     assert cfg.trend.donchian == 96 and isinstance(cfg.trend.donchian, int)
     assert cfg.strategy.z_arm == 2.5
+
+
+def test_rhythm_finds_hidden_pattern_but_not_random_walk():
+    from altcoin_squeeze_bot.rhythm import evaluate, synthetic
+
+    rand, _, _ = evaluate(synthetic("random", n=8000))
+    patt, _, _ = evaluate(synthetic("pattern", n=8000))
+    assert abs(rand.z_score) < 3
+    assert patt.z_score > 5 and patt.hit_rate > 0.58
+    assert patt.net_bp < patt.gross_bp  # costs are always charged
+
+
+def test_rhythm_scale_is_fit_on_training_only():
+    from altcoin_squeeze_bot.rhythm import Scale, synthetic
+
+    c = synthetic("random", n=2000)
+    s = Scale.fit(c[:1000])
+    notes = s.notes(c)
+    assert len(notes) == len(c) - 1
+    assert all(0 <= p < 5 and 0 <= v < 3 for p, v in notes)
+    assert len(s.ret_edges) == 4 and s.ret_edges == sorted(s.ret_edges)
+
+
+def test_rhythm_markov_backoff_and_midi(tmp_path):
+    from altcoin_squeeze_bot.rhythm import RhythmModel, to_midi
+
+    notes = [(0, 1), (4, 1)] * 50
+    rets = [-0.001, 0.001] * 50
+    m = RhythmModel(max_order=2, min_count=5).fit(notes, rets)
+    probs, order = m.distribution([(4, 1), (0, 1)])
+    assert order == 2 and probs[4] == 1.0  # after a drop always comes a rally
+    assert m.expected_return([(0, 1)]) > 0
+    probs, order = m.distribution([(2, 2)])  # unseen phrase -> falls back to unconditional counts
+    assert order == 0
+    assert m.continue_melody([(0, 1)], 4) == [4, 0, 4, 0]
+
+    path = tmp_path / "x.mid"
+    to_midi(notes[:10], str(path), predicted=[4, 0])
+    data = path.read_bytes()
+    assert data[:4] == b"MThd" and data[14:18] == b"MTrk" and data.endswith(b"\xff\x2f\x00")
