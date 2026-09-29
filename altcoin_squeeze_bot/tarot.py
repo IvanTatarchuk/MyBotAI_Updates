@@ -236,7 +236,7 @@ class TarotDetector:
 
     def __init__(self, cfg: TarotConfig, symbol: str = ""):
         self.cfg, self.symbol = cfg, symbol
-        self.name = "hanged" if cfg.invert else "tarot"
+        self.name = "hanged" if cfg.invert else ("destiny" if cfg.owner else "tarot")
         self.reader = ChartReader()
         self.stats = CardStats()
         self._learned_upto = -1  # last bar index whose forward return has been recorded
@@ -285,6 +285,12 @@ class TarotDetector:
         n, mean, t, _ = self.meaning(cards, i)
         if n < cfg.min_count or abs(t) < cfg.t_min or abs(mean) < cfg.min_edge:
             return None
+        owner = cfg.owner
+        if owner is not None:  # destiny mode: owner's resonant personal days, or the birth card on the chart
+            present = cards[i]
+            birth_card_now = present is not None and present[0] == owner.birth_card
+            if not (birth_card_now or owner.is_resonant_day(bars[i].ts)):
+                return None
         a = self._atr(bars, i)
         if a <= 0:
             return None

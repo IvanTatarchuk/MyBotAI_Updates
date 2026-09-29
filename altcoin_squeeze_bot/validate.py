@@ -42,6 +42,7 @@ GRIDS: dict[str, dict[str, list[float]]] = {
     },
 }
 GRIDS["hanged"] = GRIDS["tarot"]  # same grid, every signal reversed
+GRIDS["destiny"] = GRIDS["tarot"]  # same grid, owner's numerology filter
 DEFAULT_GRID = GRIDS["squeeze"]
 
 
@@ -106,7 +107,7 @@ def slice_period(
 
 def r_multiples(data, feats, cfg: Config, t0: int, t1: int) -> list[float]:
     warmup = cfg.strategy.arm_ttl_bars + cfg.strategy.crowd_window
-    if "tarot" in cfg.enabled or "hanged" in cfg.enabled:
+    if {"tarot", "hanged", "destiny"} & set(cfg.enabled):
         warmup = 10**9  # the tarot reader learns card meanings online: give it all earlier history
     d, f = slice_period(data, feats, t0, t1, warmup)
     if not d:
@@ -228,9 +229,15 @@ def main() -> None:
     ap.add_argument("--cache")
     ap.add_argument("--folds", type=int, default=4)
     ap.add_argument("--strategies", default="squeeze,trend")
+    ap.add_argument("--birth", help="owner's birth date for destiny mode, e.g. 25.07.1988 (or BOT_OWNER_BIRTH)")
+    ap.add_argument("--name", default="", help="owner's full name for destiny mode (or BOT_OWNER_NAME)")
     args = ap.parse_args()
 
     cfg = Config()
+    if args.birth:
+        from .destiny import Destiny
+
+        cfg = replace(cfg, tarot=replace(cfg.tarot, owner=Destiny.from_text(args.birth, args.name)))
     data = load_data(cfg, args.synthetic, args.symbols, args.top, args.days, args.cache)
     print("precomputing features ...")
     feats = {s: precompute_features(b, cfg.strategy) for s, b in data.items()}

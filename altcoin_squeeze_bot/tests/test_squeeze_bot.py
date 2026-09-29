@@ -426,3 +426,36 @@ def test_hanged_man_reverses_every_tarot_signal():
     for a, b in pairs:
         assert a.side != b.side and b.strategy == "hanged"
         assert abs((a.stop - a.entry) + (b.stop - b.entry)) < 1e-12  # stop mirrored to the other side
+
+
+def test_destiny_numerology_profile():
+    from altcoin_squeeze_bot.destiny import Destiny
+
+    d = Destiny.from_text("25.07.1988", "Anna Smith")  # fictional person
+    assert d.life_path == 4  # 2+5+0+7+1+9+8+8 = 40 -> 4
+    assert d.expression == 9  # ANNA 1+5+5+1 = 12, SMITH 1+4+9+2+8 = 24 -> 36 -> 9
+    assert d.birth_card == 4  # 40 > 21 -> 4 (The Emperor)
+    assert d.personal_year(2026) == 6  # 2+5+0+7 + 2+0+2+6 = 24 -> 6
+    assert d.resonant_numbers == {4, 9}
+    assert Destiny.from_text("1988-07-25") == Destiny(25, 7, 1988, "")
+    assert Destiny.from_text("10.09.1981").life_path == 11  # 1+0+0+9+1+9+8+1 = 29 -> 11, a master number is kept
+
+
+def test_destiny_mode_filters_tarot_signals_to_resonant_days():
+    from altcoin_squeeze_bot.config import TarotConfig
+    from altcoin_squeeze_bot.destiny import Destiny
+    from altcoin_squeeze_bot.tarot import TarotDetector
+
+    owner = Destiny.from_text("25.07.1988", "Anna Smith")
+    bars = generate(seed=2, n=4000)
+    plain = TarotDetector(TarotConfig(), "SYN")
+    dest = TarotDetector(TarotConfig(owner=owner), "SYN")
+    a = [s for i in range(len(bars)) if (s := plain.step(bars, i))]
+    b = [s for i in range(len(bars)) if (s := dest.step(bars, i))]
+    assert b and len(b) < len(a) and all(s.strategy == "destiny" for s in b)
+    assert {s.ts for s in b} <= {s.ts for s in a}  # a filter: never invents new signals
+    cards = dest.reader.cards
+    idx = {bar.ts: i for i, bar in enumerate(bars)}
+    for s in b:
+        c = cards[idx[s.ts]]
+        assert owner.is_resonant_day(s.ts) or c[0] == owner.birth_card
